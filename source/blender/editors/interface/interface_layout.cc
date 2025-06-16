@@ -4832,7 +4832,7 @@ PanelLayout uiLayout::panel_prop(const bContext *C,
     STRNCPY(header_litem->open_prop_name, open_prop_name.c_str());
 
     uiLayout *row = &header_litem->row(true);
-    uiLayoutSetUnitsY(row, 1.2f);
+    row->ui_units_y_set(1.2f);
 
     uiBlock *block = uiLayoutGetBlock(row);
     const int icon = is_open ? ICON_DOWNARROW_HLT : ICON_RIGHTARROW;
@@ -5101,11 +5101,6 @@ uiLayout &uiLayout::split(float percentage, bool align)
   return *split;
 }
 
-void uiLayoutSetActive(uiLayout *layout, bool active)
-{
-  layout->active_ = active;
-}
-
 void uiLayoutSetActiveDefault(uiLayout *layout, bool active_default)
 {
   layout->active_default_ = active_default;
@@ -5134,26 +5129,6 @@ void uiLayoutSetKeepAspect(uiLayout *layout, bool keepaspect)
 void uiLayoutSetAlignment(uiLayout *layout, char alignment)
 {
   layout->alignment_ = alignment;
-}
-
-void uiLayoutSetScaleX(uiLayout *layout, float scale)
-{
-  layout->scale_[0] = scale;
-}
-
-void uiLayoutSetScaleY(uiLayout *layout, float scale)
-{
-  layout->scale_[1] = scale;
-}
-
-void uiLayoutSetUnitsX(uiLayout *layout, float unit)
-{
-  layout->units_[0] = unit;
-}
-
-void uiLayoutSetUnitsY(uiLayout *layout, float unit)
-{
-  layout->units_[1] = unit;
 }
 
 void uiLayout::emboss_set(blender::ui::EmbossType emboss)
@@ -5196,11 +5171,6 @@ Panel *uiLayoutGetRootPanel(uiLayout *layout)
   return layout->root_->block->panel;
 }
 
-bool uiLayoutGetActive(uiLayout *layout)
-{
-  return layout->active_;
-}
-
 bool uiLayoutGetActiveDefault(uiLayout *layout)
 {
   return layout->active_default_;
@@ -5234,26 +5204,6 @@ int uiLayoutGetAlignment(uiLayout *layout)
 int uiLayoutGetWidth(uiLayout *layout)
 {
   return layout->w_;
-}
-
-float uiLayoutGetScaleX(uiLayout *layout)
-{
-  return layout->scale_[0];
-}
-
-float uiLayoutGetScaleY(uiLayout *layout)
-{
-  return layout->scale_[1];
-}
-
-float uiLayoutGetUnitsX(uiLayout *layout)
-{
-  return layout->units_[0];
-}
-
-float uiLayoutGetUnitsY(uiLayout *layout)
-{
-  return layout->units_[1];
 }
 
 blender::ui::EmbossType uiLayout::emboss() const

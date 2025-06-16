@@ -1452,6 +1452,12 @@ void BKE_brush_calc_curve_factors(const eBrushCurvePreset preset,
       break;
     }
     case BRUSH_CURVE_CONSTANT: {
+      for (const int i : distances.index_range()) {
+        const float distance = distances[i];
+        if (distance >= brush_radius) {
+          factors[i] = 0.0f;
+        }
+      }
       break;
     }
     case BRUSH_CURVE_SPHERE: {

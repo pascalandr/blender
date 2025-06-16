@@ -16,8 +16,11 @@
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 
+#include "BKE_attribute_legacy_convert.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
+#include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 
 #include "readfile.hh"
 
@@ -75,6 +78,27 @@ static void rename_mesh_uv_seam_attribute(Mesh &mesh)
   STRNCPY(old_seam_layer->name, new_name.c_str());
 }
 
+static void initialize_closure_input_structure_types(bNodeTree &ntree)
+{
+  LISTBASE_FOREACH (bNode *, node, &ntree.nodes) {
+    if (node->type_legacy == GEO_NODE_EVALUATE_CLOSURE) {
+      auto *storage = static_cast<NodeGeometryEvaluateClosure *>(node->storage);
+      for (const int i : blender::IndexRange(storage->input_items.items_num)) {
+        NodeGeometryEvaluateClosureInputItem &item = storage->input_items.items[i];
+        if (item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO) {
+          item.structure_type = NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_DYNAMIC;
+        }
+      }
+      for (const int i : blender::IndexRange(storage->output_items.items_num)) {
+        NodeGeometryEvaluateClosureOutputItem &item = storage->output_items.items[i];
+        if (item.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO) {
+          item.structure_type = NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_DYNAMIC;
+        }
+      }
+    }
+  }
+}
+
 void do_versions_after_linking_500(FileData * /*fd*/, Main * /*bmain*/)
 {
   /**
@@ -93,6 +117,81 @@ void blo_do_versions_500(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       bke::mesh_sculpt_mask_to_generic(*mesh);
       bke::mesh_custom_normals_to_generic(*mesh);
       rename_mesh_uv_seam_attribute(*mesh);
+    }
+
+    /* Change default Sky Texture to Nishita (after removal of old sky models) */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_SHADER) {
+        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+          if (node->type_legacy == SH_NODE_TEX_SKY && node->storage) {
+            NodeTexSky *tex = (NodeTexSky *)node->storage;
+            tex->sky_model = 0;
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 2)) {
+    LISTBASE_FOREACH (PointCloud *, pointcloud, &bmain->pointclouds) {
+      blender::bke::pointcloud_convert_customdata_to_storage(*pointcloud);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 3)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_GEOMETRY) {
+        initialize_closure_input_structure_types(*ntree);
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 7)) {
+    const int uv_select_island = 1 << 3;
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      ToolSettings *ts = scene->toolsettings;
+      if (ts->uv_selectmode & uv_select_island) {
+        ts->uv_selectmode = UV_SELECT_VERTEX;
+        ts->uv_flag |= UV_FLAG_ISLAND_SELECT;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 8)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type_legacy != CMP_NODE_DISPLACE) {
+          continue;
+        }
+        if (node->storage != nullptr) {
+          continue;
+        }
+        NodeDisplaceData *data = MEM_callocN<NodeDisplaceData>(__func__);
+        data->interpolation = CMP_NODE_INTERPOLATION_ANISOTROPIC;
+        node->storage = data;
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 9)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      if (STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT)) {
+        STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 10)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
+        view_layer->eevee.ambient_occlusion_distance = scene->eevee.gtao_distance;
+      }
     }
   }
 

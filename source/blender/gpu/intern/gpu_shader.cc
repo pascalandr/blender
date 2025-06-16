@@ -819,7 +819,7 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
     GPU_debug_group_begin(GPU_DEBUG_SHADER_COMPILATION_GROUP);
     GPU_debug_group_begin(info.name_.c_str());
   }
-  else {
+  else if (G.profile_gpu) {
     start_time = Clock::now();
   }
 
@@ -843,6 +843,8 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
   std::string defines = shader->defines_declare(info);
   std::string resources = shader->resources_declare(info);
 
+  info.resource_guard_defines(defines);
+
   defines += "#define USE_GPU_SHADER_CREATE_INFO\n";
 
   Vector<StringRefNull> typedefs;
@@ -857,7 +859,8 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
   }
 
   if (!info.vertex_source_.is_empty()) {
-    auto code = gpu_shader_dependency_get_resolved_source(info.vertex_source_);
+    Vector<StringRefNull> code = gpu_shader_dependency_get_resolved_source(info.vertex_source_,
+                                                                           info.generated_sources);
     std::string interface = shader->vertex_interface_declare(info);
 
     Vector<StringRefNull> sources;
@@ -874,11 +877,18 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
     sources.extend(info.dependencies_generated);
     sources.append(info.vertex_source_generated);
 
+    if (info.vertex_entry_fn_ != "main") {
+      sources.append("void main() { ");
+      sources.append(info.vertex_entry_fn_);
+      sources.append("(); }\n");
+    }
+
     shader->vertex_shader_from_glsl(sources);
   }
 
   if (!info.fragment_source_.is_empty()) {
-    auto code = gpu_shader_dependency_get_resolved_source(info.fragment_source_);
+    Vector<StringRefNull> code = gpu_shader_dependency_get_resolved_source(info.fragment_source_,
+                                                                           info.generated_sources);
     std::string interface = shader->fragment_interface_declare(info);
 
     Vector<StringRefNull> sources;
@@ -895,11 +905,18 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
     sources.extend(info.dependencies_generated);
     sources.append(info.fragment_source_generated);
 
+    if (info.fragment_entry_fn_ != "main") {
+      sources.append("void main() { ");
+      sources.append(info.fragment_entry_fn_);
+      sources.append("(); }\n");
+    }
+
     shader->fragment_shader_from_glsl(sources);
   }
 
   if (!info.geometry_source_.is_empty()) {
-    auto code = gpu_shader_dependency_get_resolved_source(info.geometry_source_);
+    Vector<StringRefNull> code = gpu_shader_dependency_get_resolved_source(info.geometry_source_,
+                                                                           info.generated_sources);
     std::string layout = shader->geometry_layout_declare(info);
     std::string interface = shader->geometry_interface_declare(info);
 
@@ -914,11 +931,18 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
     sources.append(info.geometry_source_generated);
     sources.extend(code);
 
+    if (info.geometry_entry_fn_ != "main") {
+      sources.append("void main() { ");
+      sources.append(info.geometry_entry_fn_);
+      sources.append("(); }\n");
+    }
+
     shader->geometry_shader_from_glsl(sources);
   }
 
   if (!info.compute_source_.is_empty()) {
-    auto code = gpu_shader_dependency_get_resolved_source(info.compute_source_);
+    Vector<StringRefNull> code = gpu_shader_dependency_get_resolved_source(info.compute_source_,
+                                                                           info.generated_sources);
     std::string layout = shader->compute_layout_declare(info);
 
     Vector<StringRefNull> sources;
@@ -931,6 +955,12 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
     sources.extend(code);
     sources.extend(info.dependencies_generated);
     sources.append(info.compute_source_generated);
+
+    if (info.compute_entry_fn_ != "main") {
+      sources.append("void main() { ");
+      sources.append(info.compute_entry_fn_);
+      sources.append("(); }\n");
+    }
 
     shader->compute_shader_from_glsl(sources);
   }
@@ -945,7 +975,7 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &info, bool is_ba
     GPU_debug_group_end();
     GPU_debug_group_end();
   }
-  else {
+  else if (G.profile_gpu) {
     TimePoint end_time = Clock::now();
     /* Note: Used by the vulkan backend. Use the same time_since_epoch as process_frame_timings. */
     ProfileReport::get().add_group_cpu(GPU_DEBUG_SHADER_COMPILATION_GROUP,
@@ -967,7 +997,11 @@ ShaderCompiler::ShaderCompiler(uint32_t threads_count,
 
   if (!GPU_use_main_context_workaround()) {
     compilation_worker_ = std::make_unique<GPUWorker>(
-        threads_count, context_type, [this]() { this->run_thread(); });
+        threads_count,
+        context_type,
+        mutex_,
+        [this]() -> void * { return this->pop_work(); },
+        [this](void *work) { this->do_work(work); });
   }
 }
 
@@ -1097,42 +1131,43 @@ bool ShaderCompiler::specialization_batch_is_ready(SpecializationBatchHandle &ha
   return handle == 0;
 }
 
-void ShaderCompiler::run_thread()
+void *ShaderCompiler::pop_work()
 {
-  while (true) {
-    Batch *batch;
-    int shader_index;
-    {
-      std::lock_guard lock(mutex_);
+  /* NOTE: Already under mutex lock when GPUWorker calls this function. */
 
-      if (compilation_queue_.is_empty()) {
-        return;
-      }
-
-      ParallelWork work = compilation_queue_.pop();
-      batch = work.batch;
-      shader_index = work.shader_index;
-    }
-
-    /* Compile */
-    if (!batch->is_specialization_batch()) {
-      batch->shaders[shader_index] = compile_shader(*batch->infos[shader_index]);
-    }
-    else {
-      specialize_shader(batch->specializations[shader_index]);
-    }
-
-    {
-      std::lock_guard lock(mutex_);
-      batch->pending_compilations--;
-      if (batch->is_ready() && batch->is_cancelled) {
-        batch->free_shaders();
-        MEM_delete(batch);
-      }
-    }
-
-    compilation_finished_notification_.notify_all();
+  if (compilation_queue_.is_empty()) {
+    return nullptr;
   }
+
+  ParallelWork work = compilation_queue_.pop();
+  return MEM_new<ParallelWork>(__func__, work);
+}
+
+void ShaderCompiler::do_work(void *work_payload)
+{
+  ParallelWork *work = reinterpret_cast<ParallelWork *>(work_payload);
+  Batch *batch = work->batch;
+  int shader_index = work->shader_index;
+  MEM_delete(work);
+
+  /* Compile */
+  if (!batch->is_specialization_batch()) {
+    batch->shaders[shader_index] = compile_shader(*batch->infos[shader_index]);
+  }
+  else {
+    specialize_shader(batch->specializations[shader_index]);
+  }
+
+  {
+    std::lock_guard lock(mutex_);
+    batch->pending_compilations--;
+    if (batch->is_ready() && batch->is_cancelled) {
+      batch->free_shaders();
+      MEM_delete(batch);
+    }
+  }
+
+  compilation_finished_notification_.notify_all();
 }
 
 void ShaderCompiler::wait_for_all()

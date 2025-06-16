@@ -222,7 +222,6 @@ class ImageManager {
     ImageMetaData metadata;
     unique_ptr<ImageLoader> loader;
 
-    float frame;
     bool need_metadata;
     bool need_load;
     bool builtin;

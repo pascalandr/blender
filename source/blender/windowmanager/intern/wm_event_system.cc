@@ -812,7 +812,6 @@ void wm_event_do_notifiers(bContext *C)
   /* Auto-run warning. */
   wm_test_autorun_warning(C);
   /* Deprecation warning. */
-  wm_test_opengl_deprecation_warning(C);
   wm_test_gpu_backend_fallback(C);
 
   GPU_render_end();
@@ -1594,13 +1593,6 @@ static wmOperatorStatus wm_operator_invoke(bContext *C,
    * that is better not duplicated. */
   if (poll_only) {
     return wmOperatorStatus(WM_operator_poll(C, ot));
-  }
-
-  if (STREQ("WM_OT_id_linked_relocate", ot->idname)) {
-    printf("foo\n");
-  }
-  if (STREQ("OUTLINER_OT_id_linked_relocate", ot->idname)) {
-    printf("bar\n");
   }
 
   if (WM_operator_poll(C, ot)) {
@@ -5611,8 +5603,8 @@ static void attach_ndof_data(wmEvent *event, const GHOST_TEventNDOFMotionData *g
 {
   wmNDOFMotionData *data = MEM_callocN<wmNDOFMotionData>("Custom-data NDOF");
 
-  const float ts = U.ndof_sensitivity;
-  const float rs = U.ndof_orbit_sensitivity;
+  const float ts = U.ndof_translation_sensitivity;
+  const float rs = U.ndof_rotation_sensitivity;
 
   mul_v3_v3fl(data->tvec, &ghost->tx, ts);
   mul_v3_v3fl(data->rvec, &ghost->rx, rs);
@@ -5624,7 +5616,7 @@ static void attach_ndof_data(wmEvent *event, const GHOST_TEventNDOFMotionData *g
     data->tvec[2] = t;
   }
 
-  data->dt = ghost->dt;
+  data->time_delta = ghost->dt;
 
   data->progress = (wmProgress)ghost->progress;
 

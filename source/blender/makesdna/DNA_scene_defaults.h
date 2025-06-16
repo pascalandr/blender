@@ -201,11 +201,8 @@
     .volumetric_light_clamp = 0.0f, \
     .volumetric_shadow_samples = 16, \
  \
-    .gtao_distance = 0.2f, \
-    .gtao_thickness = 0.5f, \
-    .gtao_focus = 0.05f, \
-    .gtao_resolution = 2, \
- \
+    .fast_gi_bias = 0.05f, \
+    .fast_gi_resolution = 2, \
     .fast_gi_step_count = 8, \
     .fast_gi_ray_count = 2, \
     .fast_gi_quality = 0.25f, \
@@ -237,7 +234,7 @@
  \
     .overscan = 3.0f, \
  \
-    .flag = SCE_EEVEE_TAA_REPROJECTION, \
+    .flag = SCE_EEVEE_TAA_REPROJECTION | SCE_EEVEE_SHADOW_ENABLED, \
   }
 
 #define _DNA_DEFAULT_SceneGreasePencil \
@@ -245,6 +242,7 @@
     .smaa_threshold = 1.0f, \
     .smaa_threshold_render = 0.25f, \
     .aa_samples = 8, \
+    .motion_blur_steps = 8, \
   }
 
 #define _DNA_DEFAULT_SceneHydra \

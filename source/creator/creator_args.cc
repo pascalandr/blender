@@ -35,6 +35,7 @@
 #  endif
 
 #  include "BKE_appdir.hh"
+#  include "BKE_blender.hh"
 #  include "BKE_blender_cli_command.hh"
 #  include "BKE_blender_version.h"
 #  include "BKE_blendfile.hh"
@@ -627,6 +628,10 @@ static const char arg_handle_print_version_doc[] =
 static int arg_handle_print_version(int /*argc*/, const char ** /*argv*/, void * /*data*/)
 {
   print_version_full();
+
+  /* Handles cleanup before exit. */
+  BKE_blender_atexit();
+
   exit(EXIT_SUCCESS);
   BLI_assert_unreachable();
   return 0;
@@ -921,6 +926,9 @@ static int arg_handle_print_help(int /*argc*/, const char ** /*argv*/, void *dat
   bArgs *ba = (bArgs *)data;
 
   print_help(ba, false);
+
+  /* Handles cleanup before exit. */
+  BKE_blender_atexit();
 
   exit(EXIT_SUCCESS);
   BLI_assert_unreachable();
@@ -1699,9 +1707,9 @@ static int arg_handle_playback_mode(int argc, const char **argv, void * /*data*/
   /* Ignore the animation player if `-b` was given first. */
   if (G.background == 0) {
     /* Skip this argument (`-a`). */
-    WM_main_playanim(argc - 1, argv + 1);
+    const int exit_code = WM_main_playanim(argc - 1, argv + 1);
 
-    exit(EXIT_SUCCESS);
+    exit(exit_code);
   }
 
   return -2;
@@ -1958,7 +1966,9 @@ static int arg_handle_engine_set(int argc, const char **argv, void *data)
 {
   bContext *C = static_cast<bContext *>(data);
   if (argc >= 2) {
-    if (STREQ(argv[1], "help")) {
+    const char *engine_name = argv[1];
+
+    if (STREQ(engine_name, "help")) {
       printf("Blender Engine Listing:\n");
       LISTBASE_FOREACH (RenderEngineType *, type, &R_engines) {
         printf("\t%s\n", type->idname);
@@ -1968,12 +1978,17 @@ static int arg_handle_engine_set(int argc, const char **argv, void *data)
     else {
       Scene *scene = CTX_data_scene(C);
       if (scene) {
-        if (BLI_findstring(&R_engines, argv[1], offsetof(RenderEngineType, idname))) {
-          STRNCPY_UTF8(scene->r.engine, argv[1]);
+        /* Backwards compatibility. */
+        if (STREQ(engine_name, "BLENDER_EEVEE_NEXT")) {
+          engine_name = "BLENDER_EEVEE";
+        }
+
+        if (BLI_findstring(&R_engines, engine_name, offsetof(RenderEngineType, idname))) {
+          STRNCPY_UTF8(scene->r.engine, engine_name);
           DEG_id_tag_update(&scene->id, ID_RECALC_SYNC_TO_EVAL);
         }
         else {
-          fprintf(stderr, "\nError: engine not found '%s'\n", argv[1]);
+          fprintf(stderr, "\nError: engine not found '%s'\n", engine_name);
           exit(1);
         }
       }

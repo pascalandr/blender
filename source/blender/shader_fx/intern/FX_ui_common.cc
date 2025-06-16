@@ -118,7 +118,7 @@ static void gpencil_shaderfx_ops_extra_draw(bContext *C, uiLayout *layout, void 
   uiLayoutSetContextPointer(layout, "shaderfx", &ptr);
   layout->operator_context_set(WM_OP_INVOKE_DEFAULT);
 
-  uiLayoutSetUnitsX(layout, 4.0f);
+  layout->ui_units_x_set(4.0f);
 
   /* Duplicate. */
   layout->op("OBJECT_OT_shaderfx_copy",
@@ -181,7 +181,7 @@ static void shaderfx_panel_header(const bContext * /*C*/, Panel *panel)
   /* Mode enabling buttons. */
   if (fxti->flags & eShaderFxTypeFlag_SupportsEditmode) {
     uiLayout *sub = &row->row(true);
-    uiLayoutSetActive(sub, false);
+    sub->active_set(false);
     sub->prop(ptr, "show_in_editmode", UI_ITEM_NONE, "", ICON_NONE);
   }
   row->prop(ptr, "show_viewport", UI_ITEM_NONE, "", ICON_NONE);

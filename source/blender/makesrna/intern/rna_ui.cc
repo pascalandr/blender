@@ -1363,12 +1363,12 @@ static void rna_Menu_bl_description_set(PointerRNA *ptr, const char *value)
 
 static bool rna_UILayout_active_get(PointerRNA *ptr)
 {
-  return uiLayoutGetActive(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->active();
 }
 
 static void rna_UILayout_active_set(PointerRNA *ptr, bool value)
 {
-  uiLayoutSetActive(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->active_set(value);
 }
 
 static bool rna_UILayout_active_default_get(PointerRNA *ptr)
@@ -1460,42 +1460,42 @@ static int rna_UILayout_direction_get(PointerRNA *ptr)
 
 static float rna_UILayout_scale_x_get(PointerRNA *ptr)
 {
-  return uiLayoutGetScaleX(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->scale_x();
 }
 
 static void rna_UILayout_scale_x_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetScaleX(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->scale_x_set(value);
 }
 
 static float rna_UILayout_scale_y_get(PointerRNA *ptr)
 {
-  return uiLayoutGetScaleY(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->scale_y();
 }
 
 static void rna_UILayout_scale_y_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetScaleY(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->scale_y_set(value);
 }
 
 static float rna_UILayout_units_x_get(PointerRNA *ptr)
 {
-  return uiLayoutGetUnitsX(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->ui_units_x();
 }
 
 static void rna_UILayout_units_x_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetUnitsX(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->ui_units_x_set(value);
 }
 
 static float rna_UILayout_units_y_get(PointerRNA *ptr)
 {
-  return uiLayoutGetUnitsY(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->ui_units_y();
 }
 
 static void rna_UILayout_units_y_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetUnitsY(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->ui_units_y_set(value);
 }
 
 static int rna_UILayout_emboss_get(PointerRNA *ptr)

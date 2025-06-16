@@ -216,8 +216,7 @@ typedef struct UserDef_Experimental {
   char use_all_linked_data_direct;
   char use_extensions_debug;
   char use_recompute_usercount_on_save_debug;
-  char write_large_blend_file_blocks;
-  char use_attribute_storage_write;
+  char write_legacy_blend_file_format;
   char SANITIZE_AFTER_HERE;
   /* The following options are automatically sanitized (set to 0)
    * when the release cycle is not alpha. */
@@ -228,7 +227,7 @@ typedef struct UserDef_Experimental {
   char use_shader_node_previews;
   char use_bundle_and_closure_nodes;
   char use_socket_structure_type;
-  char _pad[4];
+  char _pad[5];
 } UserDef_Experimental;
 
 #define USER_EXPERIMENTAL_TEST(userdef, member) \
@@ -488,12 +487,16 @@ typedef struct UserDef {
   int gpu_preferred_index;
   uint32_t gpu_preferred_vendor_id;
   uint32_t gpu_preferred_device_id;
-  char _pad16[4];
+
+  /** Max number of parallel shader compilation workers. */
+  short gpu_shader_workers;
+  /** eUserpref_ShaderCompileMethod (OpenGL only). */
+  short shader_compilation_method;
+
+  char _pad16[2];
+
   /** #eGPUBackendType */
   short gpu_backend;
-
-  /** Max number of parallel shader compilation subprocesses. */
-  short max_shader_compilation_subprocesses;
 
   /** Number of samples for FPS display calculations. */
   short playback_fps_samples;
@@ -510,10 +513,11 @@ typedef struct UserDef {
   /** Curve non-linearity parameter. */
   float pressure_softness;
 
-  /** Overall sensitivity of 3D mouse. */
-  float ndof_sensitivity;
-  float ndof_orbit_sensitivity;
-  /** Dead-zone of 3D mouse. */
+  /** 3D mouse: overall translation sensitivity. */
+  float ndof_translation_sensitivity;
+  /** 3D mouse: overall rotation sensitivity. */
+  float ndof_rotation_sensitivity;
+  /** 3D mouse: dead-zone. */
   float ndof_deadzone;
   /** #eNdof_Flag, flags for 3D mouse. */
   int ndof_flag;
@@ -803,7 +807,7 @@ typedef enum eUserpref_UI_Flag2 {
 
 /** #UserDef.gpu_flag */
 typedef enum eUserpref_GPU_Flag {
-  USER_GPU_FLAG_NO_DEPT_PICK = (1 << 0), /* Unused. To be removed. */
+  USER_GPU_FLAG_UNUSED_0 = (1 << 0), /* Unused. To be removed. */
   USER_GPU_FLAG_NO_EDIT_MODE_SMOOTH_WIRE = (1 << 1),
   USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE = (1 << 2),
   USER_GPU_FLAG_SUBDIVISION_EVALUATION = (1 << 3),
@@ -1122,9 +1126,14 @@ typedef enum eUserpref_SeqProxySetup {
 } eUserpref_SeqProxySetup;
 
 typedef enum eUserpref_SeqEditorFlags {
-  USER_SEQ_ED_SIMPLE_TWEAKING = (1 << 0),
+  USER_SEQ_ED_UNUSED_0 = (1 << 0), /* Dirty. */
   USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT = (1 << 1),
 } eUserpref_SeqEditorFlags;
+
+typedef enum eUserpref_ShaderCompileMethod {
+  USER_SHADER_COMPILE_THREAD = 0,
+  USER_SHADER_COMPILE_SUBPROCESS = 1,
+} eUserpref_ShaderCompileMethod;
 
 /* Locale Ids. Auto will try to get local from OS. Our default is English though. */
 /** #UserDef.language */

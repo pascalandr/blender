@@ -33,7 +33,10 @@ class ShapeKeyTreeView : public ui::AbstractTreeView {
   Object &object_;
 
  public:
-  ShapeKeyTreeView(Object &ob) : object_(ob){};
+  ShapeKeyTreeView(Object &ob) : object_(ob)
+  {
+    is_flat_ = true;
+  };
 
   void build_tree() override;
 };
@@ -50,7 +53,6 @@ class ShapeKeyDragController : public ui::AbstractViewItemDragController {
   ShapeKey drag_key_;
 
  public:
-  ShapeKeyDragController() = default;
   ShapeKeyDragController(ShapeKeyTreeView &view, ShapeKey drag_key)
       : AbstractViewItemDragController(view), drag_key_(drag_key)
   {
@@ -170,6 +172,11 @@ class ShapeKeyItem : public ui::AbstractTreeViewItem {
     uiLayoutSetPropDecorate(sub, false);
     PointerRNA shapekey_ptr = RNA_pointer_create_discrete(
         &shape_key_.key->id, &RNA_ShapeKey, shape_key_.kb);
+
+    if (shape_key_.index > 0) {
+      sub->prop(&shapekey_ptr, "value", UI_ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
+    }
+
     sub->prop(&shapekey_ptr, "mute", UI_ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
     sub->prop(&shapekey_ptr, "lock_shape", UI_ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
   }

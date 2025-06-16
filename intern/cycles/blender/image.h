@@ -35,17 +35,4 @@ class BlenderImageLoader : public ImageLoader {
   bool free_cache;
 };
 
-class BlenderPointDensityLoader : public ImageLoader {
- public:
-  BlenderPointDensityLoader(BL::Depsgraph depsgraph, BL::ShaderNodeTexPointDensity b_node);
-
-  bool load_metadata(ImageMetaData &metadata) override;
-  bool load_pixels_full(const ImageMetaData &metadata, uint8_t *pixels) override;
-  string name() const override;
-  bool equals(const ImageLoader &other) const override;
-
-  BL::Depsgraph b_depsgraph;
-  BL::ShaderNodeTexPointDensity b_node;
-};
-
 CCL_NAMESPACE_END

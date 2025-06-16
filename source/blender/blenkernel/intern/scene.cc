@@ -207,7 +207,7 @@ static void scene_init_data(ID *id)
     pset->brush[PE_BRUSH_CUT].strength = 1.0f;
   }
 
-  STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
+  STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
 
   STRNCPY(scene->r.pic, U.renderdir);
 
@@ -300,22 +300,6 @@ static void scene_copy_data(Main *bmain,
   BLI_duplicatelist(&(scene_dst->r.views), &(scene_src->r.views));
   BKE_keyingsets_copy(&(scene_dst->keyingsets), &(scene_src->keyingsets));
 
-  if (scene_src->nodetree) {
-    BKE_id_copy_in_lib(bmain,
-                       owner_library,
-                       &scene_src->nodetree->id,
-                       &scene_dst->id,
-                       reinterpret_cast<ID **>(&scene_dst->nodetree),
-                       flag_embedded_id_data);
-    /* TODO this should not be needed anymore? Should be handled by generic remapping code in
-     * #BKE_id_copy_in_lib. */
-    BKE_libblock_relink_ex(bmain,
-                           scene_dst->nodetree,
-                           (void *)(&scene_src->id),
-                           &scene_dst->id,
-                           ID_REMAP_SKIP_NEVER_NULL_USAGE | ID_REMAP_SKIP_USER_CLEAR);
-  }
-
   if (scene_src->rigidbody_world) {
     scene_dst->rigidbody_world = BKE_rigidbody_world_copy(scene_src->rigidbody_world,
                                                           flag_subdata);
@@ -392,12 +376,8 @@ static void scene_free_data(ID *id)
 
   BKE_keyingsets_free(&scene->keyingsets);
 
-  /* is no lib link block, but scene extension */
-  if (scene->nodetree) {
-    blender::bke::node_tree_free_embedded_tree(scene->nodetree);
-    MEM_freeN(scene->nodetree);
-    scene->nodetree = nullptr;
-  }
+  BLI_assert_msg(scene->nodetree == nullptr,
+                 "Pointer should not be valid after blend file reading.");
 
   if (scene->rigidbody_world) {
     /* Prevent rigidbody freeing code to follow other IDs pointers, this should never be allowed
@@ -848,6 +828,8 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->clip, IDWALK_CB_USER);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->gpd, IDWALK_CB_USER);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->r.bake.cage_object, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->compositing_node_group, IDWALK_CB_USER);
+
   if (scene->nodetree) {
     /* nodetree **are owned by IDs**, treat them as mere sub-data and not real ID! */
     BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
@@ -1008,11 +990,23 @@ static void scene_foreach_cache(ID *id,
 static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Scene *sce = (Scene *)id;
+  const bool is_write_undo = BLO_write_is_undo(writer);
 
-  if (BLO_write_is_undo(writer)) {
+  if (is_write_undo) {
     /* Clean up, important in undo case to reduce false detection of changed data-blocks. */
     /* XXX This UI data should not be stored in Scene at all... */
     sce->cursor = View3DCursor{};
+  }
+
+  /* Todo(#140111): Forward compatibility support will be removed in 6.0. Do not initialize the
+   * address of `scene->nodetree` anymore. */
+  if (sce->compositing_node_group && !is_write_undo) {
+    /* Scene->nodetree is written for forward compatibility. The pointer must be valid before
+     * writing the scene.*/
+    /* We need a valid, unique (within that Scene ID) memory address as 'UID' of the written
+     * embedded node tree. The simplest and safest solution to obtain this is to actually allocate
+     * a dummy byte.*/
+    sce->nodetree = reinterpret_cast<bNodeTree *>(MEM_mallocN(1, "dummy pointer"));
   }
 
   /* write LibData */
@@ -1134,13 +1128,20 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     BLO_write_struct(writer, SceneRenderView, srv);
   }
 
-  if (sce->nodetree) {
-    BLO_Write_IDBuffer temp_embedded_id_buffer{sce->nodetree->id, writer};
+  /* Todo(#140111): Forward compatibility support will be removed in 6.0. Do not write an embedded
+   * nodetree at `scene->nodetree` anymore. */
+  if (sce->compositing_node_group && !is_write_undo) {
+    BLO_Write_IDBuffer temp_embedded_id_buffer{sce->compositing_node_group->id, writer};
     bNodeTree *temp_nodetree = reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get());
+    temp_nodetree->id.flag |= ID_FLAG_EMBEDDED_DATA;
+    temp_nodetree->owner_id = &sce->id;
+    temp_nodetree->id.lib = sce->id.lib;
     /* Set deprecated chunksize for forward compatibility. */
     temp_nodetree->chunksize = 256;
     BLO_write_struct_at_address(writer, bNodeTree, sce->nodetree, temp_nodetree);
     blender::bke::node_tree_blend_write(writer, temp_nodetree);
+    MEM_freeN(reinterpret_cast<void *>(sce->nodetree));
+    sce->nodetree = nullptr;
   }
 
   BKE_color_managed_view_settings_blend_write(writer, &sce->view_settings);
@@ -1931,6 +1932,10 @@ Scene *BKE_scene_duplicate(Main *bmain, Scene *sce, eSceneCopyMethod type)
     /* Full copy of GreasePencil. */
     BKE_id_copy_for_duplicate(bmain, (ID *)sce->gpd, duplicate_flags, copy_flags);
 
+    /* Full copy of the compositing node tree. */
+    BKE_id_copy_for_duplicate(
+        bmain, reinterpret_cast<ID *>(sce->compositing_node_group), duplicate_flags, copy_flags);
+
     /* Deep-duplicate collections and objects (using preferences' settings for which sub-data to
      * duplicate along the object itself). */
     BKE_collection_duplicate(bmain,
@@ -2090,7 +2095,8 @@ int BKE_scene_base_iter_next(
   if (val == 0) {
     iter->phase = F_START;
     iter->dupob = nullptr;
-    iter->duplilist = nullptr;
+    iter->dupob_index = -1;
+    iter->duplilist.clear();
     iter->dupli_refob = nullptr;
   }
   else {
@@ -2159,13 +2165,14 @@ int BKE_scene_base_iter_next(
              * this enters eternal loop because of
              * makeDispListMBall getting called inside of collection_duplilist */
             if ((*base)->object->instance_collection == nullptr) {
-              iter->duplilist = object_duplilist(depsgraph, (*scene), (*base)->object);
+              object_duplilist(depsgraph, (*scene), (*base)->object, nullptr, iter->duplilist);
 
-              iter->dupob = static_cast<DupliObject *>(iter->duplilist->first);
+              iter->dupob = iter->duplilist.is_empty() ? nullptr : &iter->duplilist.first();
+              iter->dupob_index = 0;
 
               if (!iter->dupob) {
-                free_object_duplilist(iter->duplilist);
-                iter->duplilist = nullptr;
+                iter->duplilist.clear();
+                iter->dupob_index = -1;
               }
               iter->dupli_refob = nullptr;
             }
@@ -2188,7 +2195,13 @@ int BKE_scene_base_iter_next(
           }
           copy_m4_m4((*ob)->runtime->object_to_world.ptr(), iter->dupob->mat);
 
-          iter->dupob = iter->dupob->next;
+          if (++iter->dupob_index < iter->duplilist.size()) {
+            iter->dupob = &iter->duplilist[iter->dupob_index];
+          }
+          else {
+            iter->dupob = nullptr;
+            iter->dupob_index = -1;
+          }
         }
         else if (iter->phase == F_DUPLI) {
           iter->phase = F_SCENE;
@@ -2200,8 +2213,7 @@ int BKE_scene_base_iter_next(
             iter->dupli_refob = nullptr;
           }
 
-          free_object_duplilist(iter->duplilist);
-          iter->duplilist = nullptr;
+          iter->duplilist.clear();
           run_again = true;
         }
       }
@@ -2826,8 +2838,7 @@ bool BKE_scene_use_spherical_stereo(Scene *scene)
 
 bool BKE_scene_uses_blender_eevee(const Scene *scene)
 {
-  return STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE) ||
-         STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
+  return STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
 }
 
 bool BKE_scene_uses_blender_workbench(const Scene *scene)
