@@ -1070,10 +1070,10 @@ OSL::TextureSystem::TextureHandle *OSLRenderServices::get_texture_handle(
   switch (it->second.type) {
     case OSLTextureHandle::IMAGE:
       return reinterpret_cast<OSL::TextureSystem::TextureHandle *>(OSL_TEXTURE_HANDLE_TYPE_SVM |
-                                                                   it->second.svm_slots[0].y);
+                                                                   it->second.id);
     case OSLTextureHandle::IES:
       return reinterpret_cast<OSL::TextureSystem::TextureHandle *>(OSL_TEXTURE_HANDLE_TYPE_IES |
-                                                                   it->second.svm_slots[0].y);
+                                                                   it->second.id);
     case OSLTextureHandle::AO:
       return reinterpret_cast<OSL::TextureSystem::TextureHandle *>(
           OSL_TEXTURE_HANDLE_TYPE_AO_OR_BEVEL | 1);
@@ -1088,15 +1088,14 @@ OSL::TextureSystem::TextureHandle *OSLRenderServices::get_texture_handle(
 
 bool OSLRenderServices::good(OSL::TextureSystem::TextureHandle *texture_handle)
 {
-  /* TODO: this check may not be enough. */
   OSLTextureHandle *handle = (OSLTextureHandle *)texture_handle;
-  return handle->type != OSLTextureHandle::IMAGE && handle->svm_slots[0].y != -1;
+  return handle->type != OSLTextureHandle::IMAGE && handle->id != KERNEL_IMAGE_NONE;
 }
 
 bool OSLRenderServices::is_udim(OSL::TextureSystem::TextureHandle *texture_handle)
 {
   OSLTextureHandle *handle = (OSLTextureHandle *)texture_handle;
-  return handle->type == OSLTextureHandle::IMAGE && handle->svm_slots[0].w != -1;
+  return handle->type == OSLTextureHandle::IMAGE && handle->id <= -1;
 }
 
 bool OSLRenderServices::texture(OSLUStringHash filename,
@@ -1171,38 +1170,9 @@ bool OSLRenderServices::texture(OSLUStringHash filename,
       break;
     }
     case OSLTextureHandle::IMAGE: {
-      int id = -1;
-      if (handle->svm_slots[0].w == -1) {
-        /* Single texture. */
-        id = handle->svm_slots[0].y;
-      }
-      else {
-        /* Tiled texture. */
-        const int tx = (int)s;
-        const int ty = (int)t;
-        const int tile = 1001 + 10 * ty + tx;
-        for (const int4 &tile_node : handle->svm_slots) {
-          if (tile_node.x == tile) {
-            id = tile_node.y;
-            break;
-          }
-          if (tile_node.z == tile) {
-            id = tile_node.w;
-            break;
-          }
-        }
-        s -= tx;
-        t -= ty;
-      }
-
-      float4 rgba;
-      if (id == -1) {
-        rgba = IMAGE_TEXTURE_MISSING_RGBA;
-      }
-      else {
-        const differential2 duv = {{dsdx, dtdx}, {dsdy, dtdy}};
-        rgba = kernel_image_interp(kernel_globals, id, s, 1.0f - t, duv);
-      }
+      const differential2 duv = {{dsdx, dtdx}, {dsdy, dtdy}};
+      const float4 rgba = kernel_image_interp_with_udim(
+          kernel_globals, handle->id, make_float2(s, t), duv);
 
       result[0] = rgba[0];
       if (nchannels > 1) {
@@ -1219,7 +1189,7 @@ bool OSLRenderServices::texture(OSLUStringHash filename,
     }
     case OSLTextureHandle::IES: {
       /* IES light. */
-      result[0] = kernel_ies_interp(kernel_globals, handle->svm_slots[0].y, s, t);
+      result[0] = kernel_ies_interp(kernel_globals, handle->id, s, t);
       status = true;
       break;
     }
@@ -1271,9 +1241,10 @@ bool OSLRenderServices::texture3d(OSLUStringHash filename,
 
   switch (handle->type) {
     case OSLTextureHandle::IMAGE: {
-      const int slot = handle->svm_slots[0].y;
+      /* TODO: test this case. Different handle type? */
       const float3 P_float3 = make_float3(P.x, P.y, P.z);
-      float4 rgba = kernel_image_interp_3d(kernel_globals, slot, P_float3, INTERPOLATION_NONE);
+      float4 rgba = kernel_image_interp_3d(
+          kernel_globals, handle->id, P_float3, INTERPOLATION_NONE);
 
       result[0] = rgba[0];
       if (nchannels > 1) {

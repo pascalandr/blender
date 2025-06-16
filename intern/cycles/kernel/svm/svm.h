@@ -211,7 +211,7 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
       offset = svm_node_vector_displacement<node_feature_mask>(kg, sd, stack, node, offset);
       break;
       SVM_CASE(NODE_TEX_IMAGE)
-      offset = svm_node_tex_image(kg, sd, stack, node, offset);
+      svm_node_tex_image(kg, sd, stack, node);
       break;
       SVM_CASE(NODE_TEX_IMAGE_BOX)
       svm_node_tex_image_box(kg, sd, stack, node);

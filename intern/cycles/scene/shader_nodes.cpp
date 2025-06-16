@@ -398,44 +398,17 @@ void ImageTextureNode::compile(SVMCompiler &compiler)
   }
 
   if (projection != NODE_IMAGE_PROJ_BOX) {
-    /* If there only is one image (a very common case), we encode it as a negative value. */
-    int num_nodes;
-    if (handle.num_tiles() == 0) {
-      num_nodes = -handle.svm_slot();
-    }
-    else {
-      num_nodes = divide_up(handle.num_tiles(), 2);
-    }
-
     compiler.add_node(NODE_TEX_IMAGE,
-                      num_nodes,
+                      handle.kernel_id(),
                       compiler.encode_uchar4(vector_offset,
                                              compiler.stack_assign_if_linked(color_out),
                                              compiler.stack_assign_if_linked(alpha_out),
                                              flags),
                       projection);
-
-    if (num_nodes > 0) {
-      for (int i = 0; i < num_nodes; i++) {
-        int4 node;
-        node.x = tiles[2 * i];
-        node.y = handle.svm_slot(2 * i);
-        if (2 * i + 1 < tiles.size()) {
-          node.z = tiles[2 * i + 1];
-          node.w = handle.svm_slot(2 * i + 1);
-        }
-        else {
-          node.z = -1;
-          node.w = -1;
-        }
-        compiler.add_node(node.x, node.y, node.z, node.w);
-      }
-    }
   }
   else {
-    assert(handle.num_svm_slots() == 1);
     compiler.add_node(NODE_TEX_IMAGE_BOX,
-                      handle.svm_slot(),
+                      handle.kernel_id(),
                       compiler.encode_uchar4(vector_offset,
                                              compiler.stack_assign_if_linked(color_out),
                                              compiler.stack_assign_if_linked(alpha_out),
@@ -454,7 +427,7 @@ void ImageTextureNode::compile(OSLCompiler &compiler)
 
   if (handle.empty()) {
     ImageManager *image_manager = compiler.scene->image_manager.get();
-    handle = image_manager->add_image(filename.string(), image_params());
+    handle = image_manager->add_image(filename.string(), image_params(), tiles);
   }
 
   const ImageMetaData metadata = handle.metadata();
@@ -466,9 +439,6 @@ void ImageTextureNode::compile(OSLCompiler &compiler)
   const bool unassociate_alpha = !(ColorSpaceManager::colorspace_is_data(colorspace) ||
                                    alpha_type == IMAGE_ALPHA_CHANNEL_PACKED ||
                                    alpha_type == IMAGE_ALPHA_IGNORE);
-  const bool is_tiled = (filename.find("<UDIM>") != string::npos ||
-                         filename.find("<UVTILE>") != string::npos) ||
-                        handle.num_tiles() > 0;
 
   compiler.parameter(this, "projection");
   compiler.parameter(this, "projection_blend");
@@ -476,7 +446,6 @@ void ImageTextureNode::compile(OSLCompiler &compiler)
   compiler.parameter("ignore_alpha", alpha_type == IMAGE_ALPHA_IGNORE);
   compiler.parameter("unassociate_alpha", !alpha_out->links.empty() && unassociate_alpha);
   compiler.parameter("is_float", is_float);
-  compiler.parameter("is_tiled", is_tiled);
   compiler.parameter(this, "interpolation");
   compiler.parameter(this, "extension");
 
@@ -583,7 +552,7 @@ void EnvironmentTextureNode::compile(SVMCompiler &compiler)
   }
 
   compiler.add_node(NODE_TEX_ENVIRONMENT,
-                    handle.svm_slot(),
+                    handle.kernel_id(),
                     compiler.encode_uchar4(vector_offset,
                                            compiler.stack_assign_if_linked(color_out),
                                            compiler.stack_assign_if_linked(alpha_out),
@@ -825,7 +794,7 @@ void SkyTextureNode::compile(SVMCompiler &compiler)
                     __float_as_uint(sunsky.nishita_data[7]));
   compiler.add_node(__float_as_uint(sunsky.nishita_data[8]),
                     __float_as_uint(sunsky.nishita_data[9]),
-                    handle.svm_slot(),
+                    handle.kernel_id(),
                     0);
 
   tex_mapping.compile_end(compiler, vector_in, vector_offset);

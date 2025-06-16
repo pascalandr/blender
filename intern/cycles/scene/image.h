@@ -21,10 +21,13 @@ CCL_NAMESPACE_BEGIN
 
 class Device;
 class DeviceInfo;
+class ImageSingle;
 class ImageHandle;
 class ImageKey;
-class ImageMetaData;
 class ImageManager;
+class ImageMetaData;
+class ImageUDIM;
+class ImageSlot;
 class Progress;
 class RenderStats;
 class Scene;
@@ -147,12 +150,17 @@ class ImageLoader {
 /* Image Handle
  *
  * Access handle for image in the image manager. Multiple shader nodes may
- * share the same image, and this class handles reference counting for that. */
+ * share the same image, and this class handles reference counting for that.
+ *
+ * This may reference a single image, or a UDIM with multiple images. */
 class ImageHandle {
  public:
   ImageHandle();
+  ImageHandle(ImageSlot *image_slot, ImageManager *manager);
   ImageHandle(const ImageHandle &other);
+  ImageHandle(ImageHandle &&other);
   ImageHandle &operator=(const ImageHandle &other);
+  ImageHandle &operator=(ImageHandle &&other);
   ~ImageHandle();
 
   bool operator==(const ImageHandle &other) const;
@@ -161,11 +169,9 @@ class ImageHandle {
 
   bool empty() const;
   int num_tiles() const;
-  int num_svm_slots() const;
 
   ImageMetaData metadata();
-  int svm_slot(const int slot_index = 0) const;
-  vector<int4> get_svm_slots() const;
+  int kernel_id() const;
 
   device_image *vdb_image_memory() const;
   VDBImageLoader *vdb_loader() const;
@@ -173,11 +179,52 @@ class ImageHandle {
   ImageManager *get_manager() const;
 
  protected:
-  vector<size_t> slots;
-  bool is_tiled = false;
-  ImageManager *manager;
+  ImageSlot *image_slot = nullptr;
+  ImageManager *manager = nullptr;
 
   friend class ImageManager;
+};
+
+/* Image Slot
+ *
+ * Base class for an entry in the image manager, which can either be
+ * a single image or a UDIM. */
+class ImageSlot {
+ public:
+  std::atomic<int> users = 0;
+  enum { SINGLE, UDIM } type = SINGLE;
+  int id = KERNEL_IMAGE_NONE;
+  bool need_load = true;
+};
+
+/* Image Single
+ *
+ * Representation of single image texture in the image manager. */
+class ImageSingle : public ImageSlot {
+ public:
+  ImageParams params;
+  ImageMetaData metadata;
+  unique_ptr<ImageLoader> loader;
+
+  bool need_metadata = true;
+  bool builtin = false;
+
+  thread_mutex mutex;
+
+  // TODO: avoid storing these?
+  uint texture_slot = KERNEL_IMAGE_NONE;
+  uint tile_descriptor_offset = KERNEL_IMAGE_NONE;
+  uint tile_descriptor_levels = 0;
+  uint tile_descriptor_num = 0;
+  device_image *vdb_memory = nullptr;
+};
+
+/* Image UDIM
+ *
+ * Representation of an UDIM image in the image manager. */
+class ImageUDIM : public ImageSlot {
+ public:
+  vector<std::pair<int, ImageHandle>> tiles;
 };
 
 /* Image Manager
@@ -204,11 +251,13 @@ class ImageManager {
   void device_load_builtin(Device *device, Scene *scene, Progress &progress);
   void device_free_builtin(Scene *scene);
 
-  void device_load_slots(Device *device, Scene *scene, Progress &progress, const set<int> &slots);
+  void device_load_handles(Device *device,
+                           Scene *scene,
+                           Progress &progress,
+                           const set<const ImageHandle *> &handles);
 
   void device_update_requested(Device *device, Scene *scene);
 
-  void set_osl_texture_system(void *texture_system);
   bool set_animation_frame_update(const int frame);
 
   void collect_statistics(RenderStats *stats);
@@ -217,59 +266,41 @@ class ImageManager {
 
   bool need_update() const;
 
-  struct Image {
-    ImageParams params;
-    ImageMetaData metadata;
-    unique_ptr<ImageLoader> loader;
-
-    bool need_metadata;
-    bool need_load;
-    bool builtin;
-
-    int users;
-    thread_mutex mutex;
-
-    // TODO: avoid storing these?
-    uint texture_slot;
-    uint tile_descriptor_offset;
-    uint tile_descriptor_levels;
-    uint tile_descriptor_num;
-    device_image *vdb_memory;
-  };
-
  private:
-  bool need_update_;
+  bool need_update_ = true;
 
   thread_mutex device_mutex;
   thread_mutex images_mutex;
-  int animation_frame;
+  int animation_frame = 0;
 
-  vector<unique_ptr<Image>> images;
+  vector<unique_ptr<ImageSingle>> images;
+  vector<unique_ptr<ImageUDIM>> image_udims;
+  int num_udim_tiles = 0;
+
   ImageCache image_cache;
-  void *osl_texture_system;
 
   bool use_texture_cache = true;
   bool auto_texture_cache = false;
   std::string texture_cache_path;
 
-  size_t add_image_slot(unique_ptr<ImageLoader> &&loader,
-                        const ImageParams &params,
-                        const bool builtin);
-  void add_image_user(const size_t slot);
-  void remove_image_user(const size_t slot);
-  Image *get_image_slot(const size_t slot);
+  ImageSingle *add_image_slot(unique_ptr<ImageLoader> &&loader,
+                              const ImageParams &params,
+                              const bool builtin);
+  ImageUDIM *add_image_slot(vector<std::pair<int, ImageHandle>> &&tiles);
 
-  void load_image_metadata(Image *img);
+  void load_image_metadata(ImageSingle *img);
 
   template<TypeDesc::BASETYPE FileFormat, typename StorageType>
-  bool file_load_image(Device *device, Image *img, const int texture_limit);
+  bool file_load_image(Device *device, ImageSingle *img, const int texture_limit);
 
   void device_load_image_tiled(Scene *scene, const size_t slot);
-  void device_update_image_requested(Device *device, Scene *scene, Image *img);
+  void device_update_image_requested(Device *device, Scene *scene, ImageSingle *img);
 
   void device_load_image_full(Device *device, Scene *scene, const size_t slot);
   void device_load_image(Device *device, Scene *scene, const size_t slot, Progress &progress);
   void device_free_image(Scene *scene, const size_t slot);
+
+  void device_update_udims(Device *device, Scene *scene);
 
   void device_resize_image_textures(Scene *scene);
   void device_copy_image_textures(Scene *scene);

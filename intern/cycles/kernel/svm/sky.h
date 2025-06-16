@@ -46,9 +46,11 @@ ccl_device float3 sky_radiance_nishita(KernelGlobals kg,
   const float angular_diameter = nishita_data[2];
   const float sun_intensity = nishita_data[3];
   const bool sun_disc = (angular_diameter >= 0.0f);
-  float3 xyz;
+  float3 xyz = zero_float3();
   /* convert dir to spherical coordinates */
   const float2 direction = direction_to_spherical(dir);
+  float v = FLT_MAX;
+
   /* render above the horizon */
   if (dir.z >= 0.0f) {
     /* definitions */
@@ -85,26 +87,27 @@ ccl_device float3 sky_radiance_nishita(KernelGlobals kg,
     }
     /* sky */
     else {
-      /* sky interpolation */
-      const float x = fractf((-direction.y - M_PI_2_F + sun_rotation) / M_2PI_F);
-      /* more pixels toward horizon compensation */
-      const float y = safe_sqrtf(dir_elevation / M_PI_2_F);
-      xyz = make_float3(kernel_image_interp(kg, texture_id, x, y, differential2_zero()));
+      /* Perform image texture lookup, with more pixels toward horizon compensation. */
+      v = safe_sqrtf(dir_elevation / M_PI_2_F);
+      xyz = one_float3();
     }
   }
   /* ground */
   else {
-    if (dir.z < -0.4f) {
-      xyz = make_float3(0.0f, 0.0f, 0.0f);
-    }
-    else {
-      /* black ground fade */
+    if (dir.z >= -0.4f) {
+      /* Perform image texture lookup with black ground fading. */
       float fade = 1.0f + dir.z * 2.5f;
       fade = sqr(fade) * fade;
-      /* interpolation */
-      const float x = fractf((-direction.y - M_PI_2_F + sun_rotation) / M_2PI_F);
-      xyz = make_float3(kernel_image_interp(kg, texture_id, x, -0.5, differential2_zero())) * fade;
+      xyz = make_float3(fade);
+      v = -0.5f;
     }
+  }
+
+  if (v != FLT_MAX) {
+    /* Image texture lookup. */
+    const float u = fractf((-direction.y - M_PI_2_F + sun_rotation) / M_2PI_F);
+    xyz *= make_float3(
+        kernel_image_interp(kg, texture_id, make_float2(u, v), differential2_zero()));
   }
 
   /* convert to RGB */

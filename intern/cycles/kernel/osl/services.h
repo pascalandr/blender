@@ -49,20 +49,12 @@ struct ThreadKernelGlobalsCPU;
 struct OSLTextureHandle {
   enum Type { IMAGE, IES, BEVEL, AO };
 
-  OSLTextureHandle(Type type, const vector<int4> &svm_slots) : type(type), svm_slots(svm_slots) {}
+  OSLTextureHandle(const Type type, const int id = -1) : type(type), id(id) {}
 
-  OSLTextureHandle(Type type, const int svm_slot = -1)
-      : OSLTextureHandle(type, {make_int4(0, svm_slot, -1, -1)})
-  {
-  }
+  OSLTextureHandle(const ImageHandle &handle) : id(handle.kernel_id()), handle(handle) {}
 
-  OSLTextureHandle(const ImageHandle &handle)
-      : type(IMAGE), svm_slots(handle.get_svm_slots()), handle(handle)
-  {
-  }
-
-  Type type;
-  vector<int4> svm_slots;
+  Type type = IMAGE;
+  int id = -1;
   ImageHandle handle;
 };
 

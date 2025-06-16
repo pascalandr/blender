@@ -264,10 +264,18 @@ ccl_device_noinline OutT kernel_image_interp_nanovdb(const ccl_global KernelImag
 }
 #endif
 
-ccl_device float4
-kernel_image_interp(KernelGlobals kg, const int id, float u, float v, differential2 duv)
+#undef SET_CUBIC_SPLINE_WEIGHTS
+
+ccl_device float4 kernel_image_interp(KernelGlobals kg,
+                                      const int tex_id,
+                                      float2 uv,
+                                      const differential2 duv)
 {
-  const ccl_global KernelImageTexture &tex = kernel_data_fetch(image_textures, id);
+  if (tex_id == KERNEL_IMAGE_NONE) {
+    return IMAGE_TEXTURE_MISSING_RGBA;
+  }
+
+  const ccl_global KernelImageTexture &tex = kernel_data_fetch(image_textures, tex_id);
   const ccl_global KernelImageInfo *info;
 
   if (tex.tile_descriptor_offset != UINT_MAX) {
@@ -298,7 +306,7 @@ kernel_image_interp(KernelGlobals kg, const int id, float u, float v, differenti
   }
   else {
     /* Full image sampling. */
-    if (tex.slot == KERNEL_IMAGE_TEX_NONE) {
+    if (tex.slot == KERNEL_IMAGE_NONE) {
       return IMAGE_TEXTURE_MISSING_RGBA;
     }
 
@@ -332,6 +340,19 @@ kernel_image_interp(KernelGlobals kg, const int id, float u, float v, differenti
 
     return make_float4(f, f, f, 1.0f);
   }
+}
+
+ccl_device_forceinline float4 kernel_image_interp_with_udim(KernelGlobals kg,
+                                                            const int image_id,
+                                                            float2 uv,
+                                                            const differential2 duv)
+{
+  const int tex_id = kernel_image_udim_map(kg, image_id, uv);
+  if (tex_id == KERNEL_IMAGE_NONE) {
+    return IMAGE_TEXTURE_MISSING_RGBA;
+  }
+
+  return kernel_image_interp(kg, tex_id, uv, duv);
 }
 
 ccl_device float4 kernel_image_interp_3d(KernelGlobals kg,

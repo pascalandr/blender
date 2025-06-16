@@ -237,12 +237,10 @@ bool VDBImageLoader::load_metadata(ImageMetaData &metadata)
   metadata.use_transform_3d = true;
 
 #  ifndef WITH_NANOVDB
-  (void)features;
 #  endif
   return true;
 #else
   (void)metadata;
-  (void)features;
   return false;
 #endif
 }

@@ -203,6 +203,8 @@ ccl_device_forceinline IntegratorShadowState integrator_shadow_path_init(
   if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = nullptr;
   }
+#  else
+  (void)kg;
 #  endif
   return shadow_state;
 }

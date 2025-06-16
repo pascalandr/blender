@@ -835,17 +835,22 @@ template<typename TexT, typename OutT> struct NanoVDBInterpolator {
 
 #undef SET_CUBIC_SPLINE_WEIGHTS
 
-ccl_device float4
-kernel_image_interp(KernelGlobals kg, const int id, float u, float v, differential2 duv)
+ccl_device float4 kernel_image_interp(KernelGlobals kg,
+                                      const int tex_id,
+                                      float2 uv,
+                                      const differential2 duv)
 {
-  const ccl_global KernelImageTexture &tex = kernel_data_fetch(image_textures, id);
+  if (tex_id == KERNEL_IMAGE_NONE) {
+    return IMAGE_TEXTURE_MISSING_RGBA;
+  }
+
+  const ccl_global KernelImageTexture &tex = kernel_data_fetch(image_textures, tex_id);
   const ccl_global KernelImageInfo *info;
 
   float2 xy = zero_float2();
 
   if (tex.tile_descriptor_offset != UINT_MAX) {
     /* Wrapping. */
-    float2 uv = make_float2(u, v);
     if (!kernel_image_tile_wrap(ExtensionType(tex.extension), uv)) {
       return zero_float4();
     }
@@ -865,13 +870,13 @@ kernel_image_interp(KernelGlobals kg, const int id, float u, float v, differenti
   }
   else {
     /* Full image sampling. */
-    if (tex.slot == KERNEL_IMAGE_TEX_NONE) {
+    if (tex.slot == KERNEL_IMAGE_NONE) {
       return IMAGE_TEXTURE_MISSING_RGBA;
     }
 
     /* Convert to pixel space. */
     info = &kernel_data_fetch(image_info, tex.slot);
-    xy = make_float2(u * info->width, v * info->height);
+    xy = make_float2(uv.x * info->width, uv.y * info->height);
   }
 
   if (UNLIKELY(!info->data)) {
@@ -907,6 +912,19 @@ kernel_image_interp(KernelGlobals kg, const int id, float u, float v, differenti
       assert(0);
       return IMAGE_TEXTURE_MISSING_RGBA;
   }
+}
+
+ccl_device_forceinline float4 kernel_image_interp_with_udim(KernelGlobals kg,
+                                                            const int image_id,
+                                                            float2 uv,
+                                                            const differential2 duv)
+{
+  const int tex_id = kernel_image_udim_map(kg, image_id, uv);
+  if (tex_id == KERNEL_IMAGE_NONE) {
+    return IMAGE_TEXTURE_MISSING_RGBA;
+  }
+
+  return kernel_image_interp(kg, tex_id, uv, duv);
 }
 
 ccl_device float4 kernel_image_interp_3d(KernelGlobals kg,

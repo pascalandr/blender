@@ -56,7 +56,8 @@ DeviceScene::DeviceScene(Device *device)
       sample_pattern_lut(device, "sample_pattern_lut", MEM_GLOBAL),
       ies_lights(device, "ies", MEM_GLOBAL),
       image_textures(device, "image_textures", MEM_GLOBAL),
-      image_texture_tile_descriptors(device, "image_texture_tile_descriptors", MEM_GLOBAL)
+      image_texture_tile_descriptors(device, "image_texture_tile_descriptors", MEM_GLOBAL),
+      image_texture_udims(device, "image_texture_udims", MEM_GLOBAL)
 {
   memset((void *)&data, 0, sizeof(data));
 }

@@ -85,6 +85,7 @@ KERNEL_DATA_ARRAY(float, ies)
 /* image textures */
 KERNEL_DATA_ARRAY(KernelImageTexture, image_textures)
 KERNEL_DATA_ARRAY(KernelTileDescriptor, image_texture_tile_descriptors)
+KERNEL_DATA_ARRAY(KernelImageUDIM, image_texture_udims)
 KERNEL_DATA_ARRAY(KernelImageInfo, image_info)
 
 #undef KERNEL_DATA_ARRAY

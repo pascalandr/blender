@@ -11,6 +11,9 @@ CCL_NAMESPACE_BEGIN
 /* Color to use when images are not found. */
 #define IMAGE_TEXTURE_MISSING_RGBA make_float4(1, 0, 1, 1)
 
+/* Image slot when there is none. */
+#define KERNEL_IMAGE_NONE INT_MAX
+
 /* Interpolation types for images. */
 enum InterpolationType {
   INTERPOLATION_NONE = ~0,
@@ -81,6 +84,12 @@ struct KernelImageInfo {
   uint depth = 0;
 };
 
+struct KernelImageUDIM {
+  /* KernelImageTexture index for UDIM tile. */
+  int tile;
+  int tex_id;
+};
+
 struct KernelImageTexture {
   /* Index into image object map. */
   uint64_t slot = 0;
@@ -102,7 +111,6 @@ struct KernelImageTexture {
 };
 
 #define KERNEL_IMAGE_TEX_PADDING 2
-#define KERNEL_IMAGE_TEX_NONE UINT_MAX
 
 using KernelTileDescriptor = uint;
 

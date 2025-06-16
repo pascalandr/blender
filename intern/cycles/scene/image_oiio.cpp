@@ -102,6 +102,8 @@ bool OIIOImageLoader::resolve_texture_cache(const bool auto_generate,
   /* Auto generate. */
   VLOG_INFO << "Auto generating texture cache file: " << tx_filepath;
 
+  /* TODO: explicitly check for write permission? And even write somewhere else? */
+
   if (!path_create_directories(tx_filepath)) {
     VLOG_WARNING << "Failed to create directory for texture cache: " << path_dirname(tx_filepath);
     return false;
