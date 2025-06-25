@@ -191,7 +191,7 @@ const pxr::SdfPath &USDAbstractWriter::usd_path() const
 
 pxr::SdfPath USDAbstractWriter::get_material_library_path() const
 {
-  static std::string material_library_path("/_materials");
+  static std::string material_library_path("/mtl");
 
   const char *root_prim_path = usd_export_context_.export_params.root_prim_path;
 
@@ -204,7 +204,7 @@ pxr::SdfPath USDAbstractWriter::get_material_library_path() const
 
 pxr::SdfPath USDAbstractWriter::get_proto_material_root_path(const HierarchyContext &context) const
 {
-  static std::string material_library_path("/_materials");
+  static std::string material_library_path("/mtl");
 
   std::string path_prefix(usd_export_context_.export_params.root_prim_path);
 
