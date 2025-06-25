@@ -86,3 +86,73 @@ compile_commands.json
 blendcache_*
 *.blend1
 *.blend2
+
+# Ignorer tous les dossiers de build Windows et leur contenu
+/build_windows*/
+
+# Fichiers CMake générés
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+
+# Binaires et objets Windows
+*.exe
+*.dll
+*.obj
+*.pdb
+*.lib
+*.exp
+*.ilk
+
+# Kernels GPU (CUDA/OptiX)
+*.cubin
+*.ptx
+*.cubin.zst
+*.ptx.zst
+
+# Fichiers temporaires de compilation
+*.o
+*.a
+*.so
+*.dylib
+
+# Fichiers de debug
+*.log
+*.tmp
+*.temp
+
+# IDE Visual Studio
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+.vs/
+Debug/
+Release/
+x64/
+
+# Fichiers système Windows
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Fichiers Python générés
+*.pyc
+*.pyo
+__pycache__/
+*.py[cod]
+
+# Fichiers de test et rendus
+tests/files/render/*/cycles_renders/
+tests/files/render/*/eevee_renders/
+tests/files/render/*/eevee_next_renders/
+tests/files/render/*/workbench_renders/
+
+# Fichiers de build spécifiques
+extern/
+intern/
+lib/
+release/
+source/
+bin/
