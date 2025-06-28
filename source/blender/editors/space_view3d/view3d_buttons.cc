@@ -67,6 +67,7 @@
 #include "ANIM_bone_collections.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "view3d_intern.hh" /* own include */
@@ -1506,7 +1507,7 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
           xco += x;
 
           row = &split->row(true);
-          uiLayoutSetEnabled(row, !locked);
+          row->enabled_set(!locked);
 
           /* The weight group value */
           /* To be reworked still */
@@ -1599,12 +1600,12 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
 
     boneptr = RNA_pointer_get(ptr, "bone");
     bone = static_cast<Bone *>(boneptr.data);
-    uiLayoutSetActive(split, !(bone->parent && bone->flag & BONE_CONNECTED));
+    split->active_set(!(bone->parent && bone->flag & BONE_CONNECTED));
   }
   colsub = &split->column(true);
   colsub->prop(ptr, "location", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   colsub = &split->column(true);
-  uiLayoutSetEmboss(colsub, blender::ui::EmbossType::NoneOrStatus);
+  colsub->emboss_set(blender::ui::EmbossType::NoneOrStatus);
   colsub->label("", ICON_NONE);
   colsub->prop(
       ptr, "lock_location", UI_ITEM_R_TOGGLE | UI_ITEM_R_ICON_ONLY, "", ICON_DECORATE_UNLOCKED);
@@ -1616,7 +1617,7 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
       colsub = &split->column(true);
       colsub->prop(ptr, "rotation_quaternion", UI_ITEM_NONE, IFACE_("Rotation"), ICON_NONE);
       colsub = &split->column(true);
-      uiLayoutSetEmboss(colsub, blender::ui::EmbossType::NoneOrStatus);
+      colsub->emboss_set(blender::ui::EmbossType::NoneOrStatus);
       colsub->prop(ptr, "lock_rotations_4d", UI_ITEM_R_TOGGLE, IFACE_("4L"), ICON_NONE);
       if (RNA_boolean_get(ptr, "lock_rotations_4d")) {
         colsub->prop(ptr,
@@ -1638,7 +1639,7 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
       colsub = &split->column(true);
       colsub->prop(ptr, "rotation_axis_angle", UI_ITEM_NONE, IFACE_("Rotation"), ICON_NONE);
       colsub = &split->column(true);
-      uiLayoutSetEmboss(colsub, blender::ui::EmbossType::NoneOrStatus);
+      colsub->emboss_set(blender::ui::EmbossType::NoneOrStatus);
       colsub->prop(ptr, "lock_rotations_4d", UI_ITEM_R_TOGGLE, IFACE_("4L"), ICON_NONE);
       if (RNA_boolean_get(ptr, "lock_rotations_4d")) {
         colsub->prop(ptr,
@@ -1660,7 +1661,7 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
       colsub = &split->column(true);
       colsub->prop(ptr, "rotation_euler", UI_ITEM_NONE, IFACE_("Rotation"), ICON_NONE);
       colsub = &split->column(true);
-      uiLayoutSetEmboss(colsub, blender::ui::EmbossType::NoneOrStatus);
+      colsub->emboss_set(blender::ui::EmbossType::NoneOrStatus);
       colsub->label("", ICON_NONE);
       colsub->prop(ptr,
                    "lock_rotation",
@@ -1675,7 +1676,7 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
   colsub = &split->column(true);
   colsub->prop(ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   colsub = &split->column(true);
-  uiLayoutSetEmboss(colsub, blender::ui::EmbossType::NoneOrStatus);
+  colsub->emboss_set(blender::ui::EmbossType::NoneOrStatus);
   colsub->label("", ICON_NONE);
   colsub->prop(
       ptr, "lock_scale", UI_ITEM_R_TOGGLE | UI_ITEM_R_ICON_ONLY, "", ICON_DECORATE_UNLOCKED);
@@ -1833,7 +1834,7 @@ static void view3d_panel_transform(const bContext *C, Panel *panel)
   Object *obedit = OBEDIT_FROM_OBACT(ob);
   uiLayout *col;
 
-  block = uiLayoutGetBlock(panel->layout);
+  block = panel->layout->block();
   UI_block_func_handle_set(block, do_view3d_region_buttons, nullptr);
 
   col = &panel->layout->column(false);
@@ -1866,11 +1867,6 @@ static void view3d_panel_transform(const bContext *C, Panel *panel)
   }
 }
 
-static void hide_collections_menu_draw(const bContext *C, Menu *menu)
-{
-  blender::ed::object::collection_hide_menu_draw(C, menu->layout);
-}
-
 void view3d_buttons_register(ARegionType *art)
 {
   PanelType *pt;
@@ -1892,15 +1888,6 @@ void view3d_buttons_register(ARegionType *art)
   pt->draw = view3d_panel_vgroup;
   pt->poll = view3d_panel_vgroup_poll;
   BLI_addtail(&art->paneltypes, pt);
-
-  MenuType *mt;
-
-  mt = MEM_callocN<MenuType>("spacetype view3d menu collections");
-  STRNCPY(mt->idname, "VIEW3D_MT_collection");
-  STRNCPY(mt->label, N_("Collection"));
-  STRNCPY(mt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
-  mt->draw = hide_collections_menu_draw;
-  WM_menutype_add(mt);
 }
 
 static wmOperatorStatus view3d_object_mode_menu_exec(bContext *C, wmOperator *op)

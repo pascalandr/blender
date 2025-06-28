@@ -42,6 +42,7 @@
 #include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include <climits>
@@ -1450,8 +1451,8 @@ static void grease_pencil_interpolate_sequence_ui(bContext *C, wmOperator *op)
 
   const InterpolationType type = InterpolationType(RNA_enum_get(op->ptr, "type"));
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
   row = &layout->row(true);
   row->prop(op->ptr, "step", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 

@@ -82,6 +82,9 @@ struct GPUViewport {
   /* TODO(@fclem): the UV-image display use the viewport but do not set any view transform for the
    * moment. The end goal would be to let the GPUViewport do the color management. */
   bool do_color_management;
+  /* Used for rendering HDR content without clamping even if display doesn't necessarily support
+   * HDR. This is used for viewport render preview (see #77909). */
+  bool force_hdr_output;
   GPUViewportBatch batch;
 };
 
@@ -167,12 +170,12 @@ static void gpu_viewport_textures_create(GPUViewport *viewport)
     viewport->depth_tx = GPU_texture_create_2d("dtxl_depth",
                                                UNPACK2(size),
                                                1,
-                                               GPU_DEPTH24_STENCIL8,
+                                               GPU_DEPTH32F_STENCIL8,
                                                usage | GPU_TEXTURE_USAGE_HOST_READ |
                                                    GPU_TEXTURE_USAGE_FORMAT_VIEW,
                                                nullptr);
     const int depth_clear = 0;
-    GPU_texture_clear(viewport->depth_tx, GPU_DATA_UINT_24_8, &depth_clear);
+    GPU_texture_clear(viewport->depth_tx, GPU_DATA_UINT_24_8_DEPRECATED, &depth_clear);
   }
 
   if (!viewport->depth_tx || !viewport->color_render_tx[0] || !viewport->color_overlay_tx[0]) {
@@ -274,6 +277,11 @@ void GPU_viewport_colorspace_set(GPUViewport *viewport,
   viewport->do_color_management = true;
 }
 
+void GPU_viewport_force_hdr(GPUViewport *viewport)
+{
+  viewport->force_hdr_output = true;
+}
+
 void GPU_viewport_stereo_composite(GPUViewport *viewport, Stereo3dFormat *stereo_format)
 {
   if (!ELEM(stereo_format->display_mode, S3D_DISPLAY_ANAGLYPH, S3D_DISPLAY_INTERLACE)) {
@@ -293,7 +301,7 @@ void GPU_viewport_stereo_composite(GPUViewport *viewport, Stereo3dFormat *stereo
       });
 
   GPUVertFormat *vert_format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(vert_format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(vert_format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   GPU_framebuffer_bind(viewport->stereo_comp_fb);
   GPU_matrix_push();
   GPU_matrix_push_projection();
@@ -354,9 +362,9 @@ static const GPUVertFormat &gpu_viewport_batch_format()
   if (g_viewport.format.attr_len == 0) {
     GPUVertFormat *format = &g_viewport.format;
     g_viewport.attr_id.pos = GPU_vertformat_attr_add(
-        format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
     g_viewport.attr_id.tex_coord = GPU_vertformat_attr_add(
-        format, "texCoord", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        format, "texCoord", blender::gpu::VertAttrType::SFLOAT_32_32);
   }
   return g_viewport.format;
 }
@@ -437,6 +445,10 @@ static void gpu_viewport_draw_colormanaged(GPUViewport *viewport,
   bool use_ocio = false;
   bool use_hdr = GPU_hdr_support() &&
                  ((viewport->view_settings.flag & COLORMANAGE_VIEW_USE_HDR) != 0);
+
+  if (viewport->force_hdr_output) {
+    use_hdr = true;
+  }
 
   if (viewport->do_color_management && display_colorspace) {
     /* During the binding process the last used VertexFormat is tested and can assert as it is not

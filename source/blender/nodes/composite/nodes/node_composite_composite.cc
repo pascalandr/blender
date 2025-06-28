@@ -9,7 +9,6 @@
 #include "BLI_bounds_types.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "GPU_shader.hh"
@@ -26,7 +25,9 @@ namespace blender::nodes::node_composite_composite_cc {
 
 static void cmp_node_composite_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image").default_value({0.0f, 0.0f, 0.0f, 1.0f});
+  b.add_input<decl::Color>("Image")
+      .default_value({0.0f, 0.0f, 0.0f, 1.0f})
+      .structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;

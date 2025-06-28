@@ -30,6 +30,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "BLT_translation.hh"
@@ -417,7 +418,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   const GreasePencilTintModifierMode tint_mode = GreasePencilTintModifierMode(
       RNA_enum_get(ptr, "tint_mode"));
@@ -426,7 +427,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   layout->prop(ptr, "color_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   uiLayout *row = &layout->row(true);
-  uiLayoutSetActive(row, !use_weight_as_factor);
+  row->active_set(!use_weight_as_factor);
   row->prop(ptr, "factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   row->prop(ptr, "use_weight_as_factor", UI_ITEM_NONE, "", ICON_MOD_VERTEX_WEIGHT);
 
@@ -437,7 +438,7 @@ static void panel_draw(const bContext *C, Panel *panel)
       break;
     case MOD_GREASE_PENCIL_TINT_GRADIENT:
       uiLayout *col = &layout->column(false);
-      uiLayoutSetPropSep(col, false);
+      col->use_property_split_set(false);
       uiTemplateColorRamp(col, ptr, "color_ramp", true);
       layout->separator();
       layout->prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);

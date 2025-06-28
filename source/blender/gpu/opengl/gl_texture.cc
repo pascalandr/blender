@@ -53,12 +53,6 @@ GLTexture::~GLTexture()
 
 bool GLTexture::init_internal()
 {
-  if ((format_ == GPU_DEPTH24_STENCIL8) && GPU_depth_blitting_workaround()) {
-    /* MacOS + Radeon Pro fails to blit depth on GPU_DEPTH24_STENCIL8
-     * but works on GPU_DEPTH32F_STENCIL8. */
-    format_ = GPU_DEPTH32F_STENCIL8;
-  }
-
   target_ = to_gl_target(type_);
 
   /* We need to bind once to define the texture type. */
@@ -138,7 +132,7 @@ bool GLTexture::init_internal(GPUTexture *src, int mip_offset, int layer_offset,
   debug::object_label(GL_TEXTURE, tex_id_, name_);
 
   /* Stencil view support. */
-  if (ELEM(format_, GPU_DEPTH24_STENCIL8, GPU_DEPTH32F_STENCIL8)) {
+  if (ELEM(format_, GPU_DEPTH32F_STENCIL8)) {
     stencil_texture_mode_set(use_stencil);
   }
 
@@ -381,7 +375,8 @@ void *GLTexture::read(int mip, eGPUDataFormat type)
    * if the texture is big. (see #66573) */
   void *data = MEM_mallocN(texture_size + 8, "GPU_texture_read");
 
-  GLenum gl_format = to_gl_data_format(format_);
+  GLenum gl_format = to_gl_data_format(format_ == GPU_DEPTH32F_STENCIL8 ? GPU_DEPTH_COMPONENT32F :
+                                                                          format_);
   GLenum gl_type = to_gl(type);
 
   if (GLContext::direct_state_access_support) {

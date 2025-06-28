@@ -10,7 +10,7 @@
 #include "BLI_math_angle_types.hh"
 #include "BLI_math_matrix.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "COM_node_operation.hh"
@@ -25,29 +25,13 @@ static void cmp_node_transform_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Color>("Image")
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
-      .compositor_domain_priority(0)
-      .compositor_realization_mode(CompositorInputRealizationMode::None);
-  b.add_input<decl::Float>("X")
-      .default_value(0.0f)
-      .min(-10000.0f)
-      .max(10000.0f)
-      .compositor_expects_single_value();
-  b.add_input<decl::Float>("Y")
-      .default_value(0.0f)
-      .min(-10000.0f)
-      .max(10000.0f)
-      .compositor_expects_single_value();
-  b.add_input<decl::Float>("Angle")
-      .default_value(0.0f)
-      .min(-10000.0f)
-      .max(10000.0f)
-      .subtype(PROP_ANGLE)
-      .compositor_expects_single_value();
-  b.add_input<decl::Float>("Scale")
-      .default_value(1.0f)
-      .min(0.0001f)
-      .max(CMP_SCALE_MAX)
-      .compositor_expects_single_value();
+      .compositor_realization_mode(CompositorInputRealizationMode::None)
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Float>("X").default_value(0.0f).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>("Y").default_value(0.0f).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>("Angle").default_value(0.0f).min(-10000.0f).max(10000.0f).subtype(
+      PROP_ANGLE);
+  b.add_input<decl::Float>("Scale").default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
   b.add_output<decl::Color>("Image");
 }
 
@@ -85,6 +69,7 @@ class TransformOperation : public NodeOperation {
         return Interpolation::Nearest;
       case CMP_NODE_INTERPOLATION_BILINEAR:
         return Interpolation::Bilinear;
+      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
       case CMP_NODE_INTERPOLATION_BICUBIC:
         return Interpolation::Bicubic;
     }

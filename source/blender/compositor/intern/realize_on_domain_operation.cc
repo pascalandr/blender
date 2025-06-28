@@ -134,11 +134,12 @@ const char *RealizeOnDomainOperation::get_realization_shader_name()
       case ResultType::Float3:
       case ResultType::Float4:
         return "compositor_realize_on_domain_bicubic_float4";
+      case ResultType::Float2:
+        return "compositor_realize_on_domain_bicubic_float2";
       case ResultType::Int:
       case ResultType::Int2:
-      case ResultType::Float2:
       case ResultType::Bool:
-        /* Realization does not support internal image types. */
+        /* Not supported. */
         break;
     }
   }
@@ -150,11 +151,12 @@ const char *RealizeOnDomainOperation::get_realization_shader_name()
       case ResultType::Float3:
       case ResultType::Float4:
         return "compositor_realize_on_domain_float4";
+      case ResultType::Float2:
+        return "compositor_realize_on_domain_float2";
       case ResultType::Int:
       case ResultType::Int2:
-      case ResultType::Float2:
       case ResultType::Bool:
-        /* Realization does not support internal image types. */
+        /* Not supported. */
         break;
     }
   }
@@ -196,6 +198,7 @@ void RealizeOnDomainOperation::realize_on_domain_cpu(const float3x3 &inverse_tra
         sample = input.sample_bilinear_wrap(
             normalized_coordinates, realization_options.repeat_x, realization_options.repeat_y);
         break;
+      case Interpolation::Anisotropic:
       case Interpolation::Bicubic:
         sample = input.sample_cubic_wrap(
             normalized_coordinates, realization_options.repeat_x, realization_options.repeat_y);

@@ -14,6 +14,7 @@
 #include "DNA_screen_types.h"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "rna_internal.hh"
@@ -184,7 +185,7 @@ static void rna_uiItemR_with_popover(uiLayout *layout,
   /* Get translated name (label). */
   std::optional<StringRefNull> text = rna_translate_ui_text(
       name, text_ctxt, nullptr, prop, translate);
-  uiItemFullR_with_popover(layout, ptr, prop, -1, 0, flag, text, icon, panel_type);
+  layout->prop_with_popover(ptr, prop, -1, 0, flag, text, icon, panel_type);
 }
 
 static void rna_uiItemR_with_menu(uiLayout *layout,
@@ -215,7 +216,7 @@ static void rna_uiItemR_with_menu(uiLayout *layout,
   /* Get translated name (label). */
   std::optional<StringRefNull> text = rna_translate_ui_text(
       name, text_ctxt, nullptr, prop, translate);
-  uiItemFullR_with_menu(layout, ptr, prop, -1, 0, flag, text, icon, menu_type);
+  layout->prop_with_menu(ptr, prop, -1, 0, flag, text, icon, menu_type);
 }
 
 static void rna_uiItemMenuEnumR(uiLayout *layout,
@@ -236,7 +237,7 @@ static void rna_uiItemMenuEnumR(uiLayout *layout,
   /* Get translated name (label). */
   std::optional<StringRefNull> text = rna_translate_ui_text(
       name, text_ctxt, nullptr, prop, translate);
-  uiItemMenuEnumR_prop(layout, ptr, prop, text, icon);
+  layout->prop_menu_enum(ptr, prop, text, icon);
 }
 
 static void rna_uiItemTabsEnumR(uiLayout *layout,
@@ -282,7 +283,7 @@ static void rna_uiItemTabsEnumR(uiLayout *layout,
     }
   }
 
-  uiItemTabsEnumR_prop(layout, C, ptr, prop, ptr_highlight, prop_highlight, icon_only);
+  layout->prop_tabs_enum(C, ptr, prop, ptr_highlight, prop_highlight, icon_only);
 }
 
 static void rna_uiItemEnumR_string(uiLayout *layout,
@@ -305,7 +306,12 @@ static void rna_uiItemEnumR_string(uiLayout *layout,
   std::optional<StringRefNull> text = rna_translate_ui_text(
       name, text_ctxt, nullptr, prop, translate);
 
-  uiItemEnumR_string_prop(layout, ptr, prop, value, text, icon);
+  layout->prop_enum(ptr, prop, value, text, icon);
+}
+
+static void rna_uiItemsEnumR(uiLayout *layout, PointerRNA *ptr, const char *propname)
+{
+  layout->props_enum(ptr, propname);
 }
 
 static void rna_uiItemPointerR(uiLayout *layout,
@@ -335,8 +341,7 @@ static void rna_uiItemPointerR(uiLayout *layout,
   std::optional<StringRefNull> text = rna_translate_ui_text(
       name, text_ctxt, nullptr, prop, translate);
 
-  uiItemPointerR_prop(
-      layout, ptr, prop, searchptr, searchprop, text, icon, results_are_suggestions);
+  layout->prop_search(ptr, prop, searchptr, searchprop, text, icon, results_are_suggestions);
 }
 
 static PointerRNA rna_uiItemO(uiLayout *layout,
@@ -373,12 +378,12 @@ static PointerRNA rna_uiItemO(uiLayout *layout,
     flag |= UI_ITEM_O_DEPRESS;
   }
 
-  const float prev_weight = uiLayoutGetSearchWeight(layout);
-  uiLayoutSetSearchWeight(layout, search_weight);
+  const float prev_weight = layout->search_weight();
+  layout->search_weight_set(search_weight);
 
-  PointerRNA opptr = layout->op(ot, text, icon, uiLayoutGetOperatorContext(layout), flag);
+  PointerRNA opptr = layout->op(ot, text, icon, layout->operator_context(), flag);
 
-  uiLayoutSetSearchWeight(layout, prev_weight);
+  layout->search_weight_set(prev_weight);
   return opptr;
 }
 
@@ -413,10 +418,7 @@ static PointerRNA rna_uiItemOMenuHold(uiLayout *layout,
     flag |= UI_ITEM_O_DEPRESS;
   }
 
-  PointerRNA opptr;
-  uiItemFullOMenuHold_ptr(
-      layout, ot, text, icon, uiLayoutGetOperatorContext(layout), flag, menu, &opptr);
-  return opptr;
+  return layout->op_menu_hold(ot, text, icon, layout->operator_context(), flag, menu);
 }
 
 static void rna_uiItemsEnumO(uiLayout *layout,
@@ -425,7 +427,7 @@ static void rna_uiItemsEnumO(uiLayout *layout,
                              const bool icon_only)
 {
   eUI_Item_Flag flag = icon_only ? UI_ITEM_R_ICON_ONLY : UI_ITEM_NONE;
-  uiItemsFullEnumO(layout, opname, propname, nullptr, uiLayoutGetOperatorContext(layout), flag);
+  uiItemsFullEnumO(layout, opname, propname, nullptr, layout->operator_context(), flag);
 }
 
 static PointerRNA rna_uiItemMenuEnumO(uiLayout *layout,
@@ -512,7 +514,7 @@ static void rna_uiItemPopoverPanel(uiLayout *layout,
     icon = icon_value;
   }
 
-  uiItemPopoverPanel(layout, C, panel_type, text, icon);
+  layout->popover(C, panel_type, text, icon);
 }
 
 static void rna_uiItemPopoverPanelFromGroup(uiLayout *layout,
@@ -522,7 +524,7 @@ static void rna_uiItemPopoverPanelFromGroup(uiLayout *layout,
                                             const char *context,
                                             const char *category)
 {
-  uiItemPopoverPanelFromGroup(layout, C, space_id, region_id, context, category);
+  layout->popover_group(C, space_id, region_id, context, category);
 }
 
 static void rna_uiItemProgress(uiLayout *layout,
@@ -542,6 +544,21 @@ static void rna_uiItemProgress(uiLayout *layout,
 static void rna_uiItemSeparator(uiLayout *layout, float factor, int type)
 {
   layout->separator(factor, LayoutSeparatorType(type));
+}
+
+static void rna_uiLayoutContextPointerSet(uiLayout *layout, const char *name, PointerRNA *ptr)
+{
+  layout->context_ptr_set(name, ptr);
+}
+
+static void rna_uiLayoutContextStringSet(uiLayout *layout, const char *name, const char *value)
+{
+  layout->context_string_set(name, value);
+}
+
+static void rna_uiLayoutSeparatorSpacer(uiLayout *layout)
+{
+  layout->separator_spacer();
 }
 
 static void rna_uiTemplateID(uiLayout *layout,
@@ -800,71 +817,6 @@ static void rna_uiTemplateEventFromKeymapItem(
   uiTemplateEventFromKeymapItem(layout, text.value_or(""), kmi, true);
 }
 
-static void rna_uiTemplateAssetView(uiLayout *layout,
-                                    bContext *C,
-                                    const char *list_id,
-                                    PointerRNA *asset_library_dataptr,
-                                    const char *asset_library_propname,
-                                    PointerRNA *assets_dataptr,
-                                    const char *assets_propname,
-                                    PointerRNA *active_dataptr,
-                                    const char *active_propname,
-                                    int filter_id_types,
-                                    int display_flags,
-                                    const char *activate_opname,
-                                    PointerRNA *r_activate_op_properties,
-                                    const char *drag_opname,
-                                    PointerRNA *r_drag_op_properties)
-{
-  blender::ed::asset::AssetFilterSettings filter_settings{};
-  filter_settings.id_types = filter_id_types ? filter_id_types : FILTER_ID_ALL;
-
-  uiTemplateAssetView(layout,
-                      C,
-                      list_id,
-                      asset_library_dataptr,
-                      asset_library_propname,
-                      assets_dataptr,
-                      assets_propname,
-                      active_dataptr,
-                      active_propname,
-                      &filter_settings,
-                      display_flags,
-                      activate_opname,
-                      r_activate_op_properties,
-                      drag_opname,
-                      r_drag_op_properties);
-}
-
-/**
- * XXX Remove filter items that require more than 32 bits for storage. RNA enums don't support
- * that currently.
- */
-static const EnumPropertyItem *rna_uiTemplateAssetView_filter_id_types_itemf(
-    bContext * /*C*/, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free)
-{
-  EnumPropertyItem *items = nullptr;
-  int totitem = 0;
-
-  for (int i = 0; rna_enum_id_type_filter_items[i].identifier; i++) {
-    if (rna_enum_id_type_filter_items[i].flag > (1ULL << 31)) {
-      continue;
-    }
-
-    EnumPropertyItem tmp = {0, "", 0, "", ""};
-    tmp.value = rna_enum_id_type_filter_items[i].flag;
-    tmp.identifier = rna_enum_id_type_filter_items[i].identifier;
-    tmp.icon = rna_enum_id_type_filter_items[i].icon;
-    tmp.name = rna_enum_id_type_filter_items[i].name;
-    tmp.description = rna_enum_id_type_filter_items[i].description;
-    RNA_enum_item_add(&items, &totitem, &tmp);
-  }
-  RNA_enum_item_end(&items, &totitem);
-
-  *r_free = true;
-  return items;
-}
-
 static uiLayout *rna_uiLayoutBox(uiLayout *layout)
 {
   return &layout->box();
@@ -921,7 +873,7 @@ void rna_uiLayoutPanelProp(uiLayout *layout,
                            uiLayout **r_layout_header,
                            uiLayout **r_layout_body)
 {
-  Panel *panel = uiLayoutGetRootPanel(layout);
+  Panel *panel = layout->root_panel();
   if (panel == nullptr) {
     BKE_reportf(reports, RPT_ERROR, "Layout panels can not be used in this context");
     *r_layout_header = nullptr;
@@ -942,7 +894,7 @@ void rna_uiLayoutPanel(uiLayout *layout,
                        uiLayout **r_layout_header,
                        uiLayout **r_layout_body)
 {
-  Panel *panel = uiLayoutGetRootPanel(layout);
+  Panel *panel = layout->root_panel();
   if (panel == nullptr) {
     BKE_reportf(reports, RPT_ERROR, "Layout panels can not be used in this context");
     *r_layout_header = nullptr;
@@ -1122,7 +1074,7 @@ PointerRNA rna_uiTemplatePopupConfirm(uiLayout *layout,
   if (opname[0] ? (!ot || !ot->srna) : false) {
     RNA_warning("%s '%s'", ot ? "operator missing srna" : "unknown operator", opname);
   }
-  else if (!UI_popup_block_template_confirm_is_supported(uiLayoutGetBlock(layout))) {
+  else if (!UI_popup_block_template_confirm_is_supported(layout->block())) {
     BKE_reportf(reports, RPT_ERROR, "template_popup_confirm used outside of a popup");
   }
   else {
@@ -1237,25 +1189,6 @@ void RNA_api_ui_layout(StructRNA *srna)
   static const EnumPropertyItem progress_type_items[] = {
       {UI_BUT_PROGRESS_TYPE_BAR, "BAR", 0, "Bar", ""},
       {UI_BUT_PROGRESS_TYPE_RING, "RING", 0, "Ring", ""},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  static const EnumPropertyItem asset_view_template_options[] = {
-      {UI_TEMPLATE_ASSET_DRAW_NO_NAMES,
-       "NO_NAMES",
-       0,
-       "",
-       "Do not display the name of each asset underneath preview images"},
-      {UI_TEMPLATE_ASSET_DRAW_NO_FILTER,
-       "NO_FILTER",
-       0,
-       "",
-       "Do not display buttons for filtering the available assets"},
-      {UI_TEMPLATE_ASSET_DRAW_NO_LIBRARY,
-       "NO_LIBRARY",
-       0,
-       "",
-       "Do not display buttons to choose or refresh an asset library"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -1496,7 +1429,7 @@ void RNA_api_ui_layout(StructRNA *srna)
   RNA_def_property_ui_text(parm, "Icon Value", "Override automatic icon of the item");
   RNA_def_boolean(func, "invert_checkbox", false, "", "Draw checkbox value inverted");
 
-  func = RNA_def_function(srna, "props_enum", "uiItemsEnumR");
+  func = RNA_def_function(srna, "props_enum", "rna_uiItemsEnumR");
   api_ui_item_rna_common(func);
 
   func = RNA_def_function(srna, "prop_menu_enum", "rna_uiItemMenuEnumR");
@@ -1665,7 +1598,7 @@ void RNA_api_ui_layout(StructRNA *srna)
                "Type",
                "The type of the separator");
 
-  func = RNA_def_function(srna, "separator_spacer", "uiItemSpacer");
+  func = RNA_def_function(srna, "separator_spacer", "rna_uiLayoutSeparatorSpacer");
   RNA_def_function_ui_description(
       func, "Item. Inserts horizontal spacing empty space into the layout between items.");
 
@@ -1689,13 +1622,13 @@ void RNA_api_ui_layout(StructRNA *srna)
                "The type of progress indicator");
 
   /* context */
-  func = RNA_def_function(srna, "context_pointer_set", "uiLayoutSetContextPointer");
+  func = RNA_def_function(srna, "context_pointer_set", "rna_uiLayoutContextPointerSet");
   parm = RNA_def_string(func, "name", nullptr, 0, "Name", "Name of entry in the context");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "data", "AnyType", "", "Pointer to put in context");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED | PARM_RNAPTR);
 
-  func = RNA_def_function(srna, "context_string_set", "uiLayoutSetContextString");
+  func = RNA_def_function(srna, "context_string_set", "rna_uiLayoutContextStringSet");
   parm = RNA_def_string(func, "name", nullptr, 0, "Name", "Name of entry in the context");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_string(func, "value", nullptr, 0, "Value", "String to put in context");
@@ -2301,88 +2234,6 @@ void RNA_api_ui_layout(StructRNA *srna)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   api_ui_item_common_text(func);
 
-  func = RNA_def_function(srna, "template_asset_view", "rna_uiTemplateAssetView");
-  RNA_def_function_ui_description(func, "Item. A scrollable list of assets in a grid view");
-  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
-  parm = RNA_def_string(func,
-                        "list_id",
-                        nullptr,
-                        0,
-                        "",
-                        "Identifier of this asset view. Necessary to tell apart different asset "
-                        "views and to identify an asset view read from a .blend");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_pointer(func,
-                         "asset_library_dataptr",
-                         "AnyType",
-                         "",
-                         "Data from which to take the active asset library property");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
-  parm = RNA_def_string(
-      func, "asset_library_propname", nullptr, 0, "", "Identifier of the asset library property");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_pointer(
-      func, "assets_dataptr", "AnyType", "", "Data from which to take the asset list property");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
-  parm = RNA_def_string(
-      func, "assets_propname", nullptr, 0, "", "Identifier of the asset list property");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_pointer(func,
-                         "active_dataptr",
-                         "AnyType",
-                         "",
-                         "Data from which to take the integer property, index of the active item");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
-  parm = RNA_def_string(
-      func,
-      "active_propname",
-      nullptr,
-      0,
-      "",
-      "Identifier of the integer property in active_data, index of the active item");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_property(func, "filter_id_types", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(parm, rna_enum_dummy_NULL_items);
-  RNA_def_property_enum_funcs(
-      parm, nullptr, nullptr, "rna_uiTemplateAssetView_filter_id_types_itemf");
-  RNA_def_property_flag(parm, PROP_ENUM_FLAG);
-  RNA_def_enum_flag(func,
-                    "display_options",
-                    asset_view_template_options,
-                    0,
-                    "",
-                    "Displaying options for the asset view");
-  RNA_def_string(func,
-                 "activate_operator",
-                 nullptr,
-                 0,
-                 "",
-                 "Name of a custom operator to invoke when activating an item");
-  parm = RNA_def_pointer(
-      func,
-      "activate_operator_properties",
-      "OperatorProperties",
-      "",
-      "Operator properties to fill in for the custom activate operator passed to the template");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
-  RNA_def_function_output(func, parm);
-  RNA_def_string(func,
-                 "drag_operator",
-                 nullptr,
-                 0,
-                 "",
-                 "Name of a custom operator to invoke when starting to drag an item. Never "
-                 "invoked together with the ``active_operator`` (if set), it's either the drag or "
-                 "the activate one");
-  parm = RNA_def_pointer(
-      func,
-      "drag_operator_properties",
-      "OperatorProperties",
-      "",
-      "Operator properties to fill in for the custom drag operator passed to the template");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
-  RNA_def_function_output(func, parm);
-
   func = RNA_def_function(
       srna, "template_light_linking_collection", "uiTemplateLightLinkingCollection");
   RNA_def_function_ui_description(func,
@@ -2458,6 +2309,11 @@ void RNA_api_ui_layout(StructRNA *srna)
       func, "properties", "OperatorProperties", "", "Operator properties to fill in");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(
+      srna, "template_shape_key_tree", "blender::ed::object::shapekey::template_tree");
+  RNA_def_function_ui_description(func, "Shape Key tree view");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
 }
 
 #endif

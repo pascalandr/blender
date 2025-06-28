@@ -580,14 +580,6 @@ void do_versions_after_linking_420(FileData *fd, Main *bmain)
       }
     }
   }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 52)) {
-    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-      if (STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE)) {
-        STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
-      }
-    }
-  }
 }
 
 static void image_settings_avi_to_ffmpeg(Scene *scene)
@@ -881,7 +873,7 @@ void blo_do_versions_420(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 10)) {
     if (!DNA_struct_member_exists(fd->filesdna, "SceneEEVEE", "int", "gtao_resolution")) {
       LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-        scene->eevee.gtao_resolution = 2;
+        scene->eevee.fast_gi_resolution = 2;
       }
     }
   }

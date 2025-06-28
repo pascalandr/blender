@@ -200,7 +200,7 @@ Paint *BKE_paint_get_active(Scene *sce, ViewLayer *view_layer);
 Paint *BKE_paint_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref);
-bool BKE_paint_use_unified_color(const ToolSettings *tool_settings, const Paint *paint);
+bool BKE_paint_use_unified_color(const Paint *paint);
 
 /* Paint brush retrieval and assignment. */
 
@@ -328,7 +328,7 @@ void paint_update_brush_rake_rotation(UnifiedPaintSettings &ups,
                                       const Brush &brush,
                                       float rotation);
 
-void BKE_paint_stroke_get_average(const Scene *scene, const Object *ob, float stroke[3]);
+void BKE_paint_stroke_get_average(const Paint *paint, const Object *ob, float stroke[3]);
 
 blender::float3 BKE_paint_randomize_color(const BrushColorJitterSettings &color_jitter,
                                           const blender::float3 &initial_hsv_jitter,
@@ -596,7 +596,7 @@ void BKE_sculptsession_free(Object *ob);
 void BKE_sculptsession_free_deformMats(SculptSession *ss);
 void BKE_sculptsession_free_vwpaint_data(SculptSession *ss);
 void BKE_sculptsession_free_pbvh(Object &object);
-void BKE_sculptsession_bm_to_me(Object *ob, bool reorder);
+void BKE_sculptsession_bm_to_me(Object *ob);
 void BKE_sculptsession_bm_to_me_for_render(Object *object);
 
 /**

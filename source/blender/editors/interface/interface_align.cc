@@ -13,8 +13,6 @@
 #include "BLI_math_vector.h"
 #include "BLI_rect.h"
 
-#include "UI_interface.hh"
-
 #include "interface_intern.hh"
 
 #include "MEM_guardedalloc.h"
@@ -359,6 +357,8 @@ static void ui_block_align_but_to_region(uiBut *but, const ARegion *region)
       break;
     default:
       /* Tabs may be shown in unaligned regions too, they just appear as regular buttons then. */
+      rect->ymin += UI_SCALE_FAC;
+      rect->ymax += UI_SCALE_FAC;
       break;
   }
 }

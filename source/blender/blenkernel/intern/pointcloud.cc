@@ -43,6 +43,8 @@
 
 #include "BLO_read_write.hh"
 
+#include "attribute_storage_access.hh"
+
 using blender::CPPType;
 using blender::float3;
 using blender::IndexRange;
@@ -63,8 +65,6 @@ static void pointcloud_init_data(ID *id)
 
   new (&pointcloud->attribute_storage.wrap()) blender::bke::AttributeStorage();
   pointcloud->runtime = new blender::bke::PointCloudRuntime();
-
-  CustomData_reset(&pointcloud->pdata);
 }
 
 static void pointcloud_copy_data(Main * /*bmain*/,
@@ -77,8 +77,6 @@ static void pointcloud_copy_data(Main * /*bmain*/,
   const PointCloud *pointcloud_src = (const PointCloud *)id_src;
   pointcloud_dst->mat = static_cast<Material **>(MEM_dupallocN(pointcloud_src->mat));
 
-  CustomData_init_from(
-      &pointcloud_src->pdata, &pointcloud_dst->pdata, CD_MASK_ALL, pointcloud_dst->totpoint);
   new (&pointcloud_dst->attribute_storage.wrap())
       blender::bke::AttributeStorage(pointcloud_src->attribute_storage.wrap());
 
@@ -101,7 +99,6 @@ static void pointcloud_free_data(ID *id)
   PointCloud *pointcloud = (PointCloud *)id;
   BKE_animdata_free(&pointcloud->id, false);
   BKE_pointcloud_batch_cache_free(pointcloud);
-  CustomData_free(&pointcloud->pdata);
   pointcloud->attribute_storage.wrap().~AttributeStorage();
   MEM_SAFE_FREE(pointcloud->mat);
   delete pointcloud->runtime;
@@ -122,12 +119,9 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   PointCloud *pointcloud = (PointCloud *)id;
 
   ResourceScope scope;
-  Vector<CustomDataLayer, 16> point_layers;
   bke::AttributeStorage::BlendWriteData attribute_data{scope};
-  attribute_storage_blend_write_prepare(
-      pointcloud->attribute_storage.wrap(), {{AttrDomain::Point, &point_layers}}, attribute_data);
-  CustomData_blend_write_prepare(
-      pointcloud->pdata, AttrDomain::Point, pointcloud->totpoint, point_layers, attribute_data);
+  attribute_storage_blend_write_prepare(pointcloud->attribute_storage.wrap(), attribute_data);
+  BLI_assert(pointcloud->pdata_legacy.totlayer == 0);
   pointcloud->attribute_storage.dna_attributes = attribute_data.attributes.data();
   pointcloud->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
 
@@ -136,12 +130,6 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */
-  CustomData_blend_write(writer,
-                         &pointcloud->pdata,
-                         point_layers,
-                         pointcloud->totpoint,
-                         CD_MASK_ALL,
-                         &pointcloud->id);
   pointcloud->attribute_storage.wrap().blend_write(*writer, attribute_data);
 
   BLO_write_pointer_array(writer, pointcloud->totcol, pointcloud->mat);
@@ -152,11 +140,8 @@ static void pointcloud_blend_read_data(BlendDataReader *reader, ID *id)
   PointCloud *pointcloud = (PointCloud *)id;
 
   /* Geometry */
-  CustomData_blend_read(reader, &pointcloud->pdata, pointcloud->totpoint);
+  CustomData_blend_read(reader, &pointcloud->pdata_legacy, pointcloud->totpoint);
   pointcloud->attribute_storage.wrap().blend_read(*reader);
-
-  /* Forward compatibility. To be removed when runtime format changes. */
-  blender::bke::pointcloud_convert_storage_to_customdata(*pointcloud);
 
   /* Materials */
   BLO_read_pointer_array(reader, pointcloud->totcol, (void **)&pointcloud->mat);
@@ -194,72 +179,32 @@ IDTypeInfo IDType_ID_PT = {
     /*lib_override_apply_post*/ nullptr,
 };
 
-template<typename T>
-static VArray<T> get_varray_attribute(const PointCloud &pointcloud,
-                                      const StringRef name,
-                                      const T default_value)
-{
-  const eCustomDataType type = blender::bke::cpp_type_to_custom_data_type(CPPType::get<T>());
-
-  const T *data = (const T *)CustomData_get_layer_named(&pointcloud.pdata, type, name);
-  if (data != nullptr) {
-    return VArray<T>::ForSpan(Span<T>(data, pointcloud.totpoint));
-  }
-  return VArray<T>::ForSingle(default_value, pointcloud.totpoint);
-}
-
-template<typename T>
-static Span<T> get_span_attribute(const PointCloud &pointcloud, const StringRef name)
-{
-  const eCustomDataType type = blender::bke::cpp_type_to_custom_data_type(CPPType::get<T>());
-
-  T *data = (T *)CustomData_get_layer_named(&pointcloud.pdata, type, name);
-  if (data == nullptr) {
-    return {};
-  }
-  return {data, pointcloud.totpoint};
-}
-
-template<typename T>
-static MutableSpan<T> get_mutable_attribute(PointCloud &pointcloud,
-                                            const StringRef name,
-                                            const T default_value = T())
-{
-  if (pointcloud.totpoint <= 0) {
-    return {};
-  }
-  const eCustomDataType type = blender::bke::cpp_type_to_custom_data_type(CPPType::get<T>());
-
-  T *data = (T *)CustomData_get_layer_named_for_write(
-      &pointcloud.pdata, type, name, pointcloud.totpoint);
-  if (data != nullptr) {
-    return {data, pointcloud.totpoint};
-  }
-  data = (T *)CustomData_add_layer_named(
-      &pointcloud.pdata, type, CD_SET_DEFAULT, pointcloud.totpoint, name);
-  MutableSpan<T> span = {data, pointcloud.totpoint};
-  if (pointcloud.totpoint > 0 && span.first() != default_value) {
-    span.fill(default_value);
-  }
-  return span;
-}
-
 Span<float3> PointCloud::positions() const
 {
-  return get_span_attribute<float3>(*this, "position");
+  return blender::bke::get_span_attribute<float3>(
+      this->attribute_storage.wrap(), blender::bke::AttrDomain::Point, "position", this->totpoint);
 }
 MutableSpan<float3> PointCloud::positions_for_write()
 {
-  return get_mutable_attribute<float3>(*this, "position");
+  return blender::bke::get_mutable_attribute<float3>(
+      this->attribute_storage.wrap(), blender::bke::AttrDomain::Point, "position", this->totpoint);
 }
 
 VArray<float> PointCloud::radius() const
 {
-  return get_varray_attribute<float>(*this, "radius", 0.01f);
+  return blender::bke::get_varray_attribute<float>(this->attribute_storage.wrap(),
+                                                   blender::bke::AttrDomain::Point,
+                                                   "radius",
+                                                   this->totpoint,
+                                                   0.01f);
 }
 MutableSpan<float> PointCloud::radius_for_write()
 {
-  return get_mutable_attribute<float>(*this, "radius", 0.01f);
+  return blender::bke::get_mutable_attribute<float>(this->attribute_storage.wrap(),
+                                                    blender::bke::AttrDomain::Point,
+                                                    "radius",
+                                                    this->totpoint,
+                                                    0.01f);
 }
 
 PointCloud *BKE_pointcloud_add(Main *bmain, const char *name)
@@ -288,11 +233,8 @@ void BKE_pointcloud_nomain_to_pointcloud(PointCloud *pointcloud_src, PointCloud 
 {
   BLI_assert(pointcloud_src->id.tag & ID_TAG_NO_MAIN);
 
-  CustomData_free(&pointcloud_dst->pdata);
-
-  const int totpoint = pointcloud_dst->totpoint = pointcloud_src->totpoint;
-  CustomData_init_from(&pointcloud_src->pdata, &pointcloud_dst->pdata, CD_MASK_ALL, totpoint);
-
+  pointcloud_dst->totpoint = pointcloud_src->totpoint;
+  pointcloud_dst->attribute_storage.wrap() = std::move(pointcloud_src->attribute_storage.wrap());
   pointcloud_dst->runtime->bounds_cache = pointcloud_src->runtime->bounds_cache;
   pointcloud_dst->runtime->bounds_with_radius_cache =
       pointcloud_src->runtime->bounds_with_radius_cache;
@@ -344,7 +286,7 @@ std::optional<int> PointCloud::material_index_max() const
 
 void PointCloud::count_memory(blender::MemoryCounter &memory) const
 {
-  CustomData_count_memory(this->pdata, this->totpoint, memory);
+  this->attribute_storage.wrap().count_memory(memory);
 }
 
 blender::bke::AttributeAccessor PointCloud::attributes() const

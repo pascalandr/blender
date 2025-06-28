@@ -44,7 +44,7 @@ void Instance::init()
   state.is_depth_only_drawing = ctx->is_depth();
   state.is_material_select = ctx->is_material_select();
   state.draw_background = ctx->options.draw_background;
-  state.show_text = ctx->options.draw_text;
+  state.show_text = false;
 
   /* Note there might be less than 6 planes, but we always compute the 6 of them for simplicity. */
   state.clipping_plane_count = clipping_enabled_ ? 6 : 0;
@@ -70,7 +70,7 @@ void Instance::init()
                                          BKE_scene_uses_blender_workbench(state.scene);
     const bool viewport_uses_eevee = STREQ(
         ED_view3d_engine_type(state.scene, state.v3d->shading.type)->idname,
-        RE_engine_id_BLENDER_EEVEE_NEXT);
+        RE_engine_id_BLENDER_EEVEE);
     const bool use_resolution_scaling = BKE_render_preview_pixel_size(&state.scene->r) != 1;
     /* Only workbench ensures the depth buffer is matching overlays.
      * Force depth prepass for other render engines.
@@ -86,6 +86,8 @@ void Instance::init()
       state.overlay = state.v3d->overlay;
       state.v3d_flag = state.v3d->flag;
       state.v3d_gridflag = state.v3d->gridflag;
+      state.show_text = !resources.is_selection() && !state.is_depth_only_drawing &&
+                        (ctx->v3d->overlay.flag & V3D_OVERLAY_HIDE_TEXT) == 0;
     }
     else {
       memset(&state.overlay, 0, sizeof(state.overlay));
@@ -426,9 +428,11 @@ void Instance::begin_sync()
 {
   /* TODO(fclem): Against design. Should not sync depending on view. */
   View &view = View::default_get();
-  state.dt = DRW_text_cache_ensure();
   state.camera_position = view.viewinv().location();
   state.camera_forward = view.viewinv().z_axis();
+
+  DRW_text_cache_destroy(state.dt);
+  state.dt = DRW_text_cache_create();
 
   resources.begin_sync(state.clipping_plane_count);
 
@@ -682,7 +686,7 @@ void Instance::end_sync()
                                                    size.x,
                                                    size.y,
                                                    1,
-                                                   GPU_DEPTH24_STENCIL8,
+                                                   GPU_DEPTH32F_STENCIL8,
                                                    GPU_TEXTURE_USAGE_GENERAL,
                                                    nullptr);
     }
@@ -955,7 +959,20 @@ void Instance::draw_v3d(Manager &manager, View &view)
     background.draw_output(resources.overlay_output_color_only_fb, manager, view);
     anti_aliasing.draw_output(resources.overlay_output_color_only_fb, manager, view);
     cursor.draw_output(resources.overlay_output_color_only_fb, manager, view);
+
+    draw_text(resources.overlay_output_color_only_fb);
   }
+}
+
+void Instance::draw_text(Framebuffer &framebuffer)
+{
+  if (state.show_text == false) {
+    return;
+  }
+  GPU_framebuffer_bind(framebuffer);
+
+  GPU_depth_test(GPU_DEPTH_NONE);
+  DRW_text_cache_draw(state.dt, state.region, state.v3d);
 }
 
 bool Instance::object_is_selected(const ObjectRef &ob_ref)
@@ -975,9 +992,9 @@ bool Instance::object_is_sculpt_mode(const ObjectRef &ob_ref)
     const Object *active_object = state.object_active;
     const bool is_active_object = ob_ref.object == active_object;
 
-    bool is_geonode_preview = ob_ref.dupli_object && ob_ref.dupli_object->preview_base_geometry;
-    bool is_active_dupli_parent = ob_ref.dupli_parent == active_object;
-    return is_active_object || (is_active_dupli_parent && is_geonode_preview);
+    bool is_active_geonode_preview = ob_ref.preview_base_geometry() != nullptr &&
+                                     ob_ref.is_active(state.object_active);
+    return is_active_object || is_active_geonode_preview;
   }
 
   if (state.object_mode == OB_MODE_SCULPT) {
@@ -1008,13 +1025,9 @@ bool Instance::object_is_edit_paint_mode(const ObjectRef &ob_ref,
                                          bool in_sculpt_mode)
 {
   bool in_edit_paint_mode = in_edit_mode || in_paint_mode || in_sculpt_mode;
-  if (ob_ref.object->base_flag & BASE_FROM_DUPLI) {
-    /* Disable outlines for objects instanced by an object in sculpt, paint or edit mode. */
-    in_edit_paint_mode |= ob_ref.dupli_parent && (object_is_edit_mode(ob_ref.dupli_parent) ||
-                                                  object_is_sculpt_mode(ob_ref.dupli_parent) ||
-                                                  object_is_paint_mode(ob_ref.dupli_parent));
-  }
-  return in_edit_paint_mode;
+  /* Disable outlines for objects instanced by an object in sculpt, paint or edit mode. */
+  return in_edit_paint_mode || ob_ref.parent_is_in_edit_paint_mode(
+                                   state.object_active, state.object_mode, state.ctx_mode);
 }
 
 bool Instance::object_is_edit_mode(const Object *object)

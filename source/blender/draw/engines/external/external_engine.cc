@@ -98,7 +98,7 @@ class Prepass {
   {
     Object *ob = ob_ref.object;
 
-    ResourceHandle handle = {0};
+    ResourceHandleRange handle = {0};
 
     LISTBASE_FOREACH (ParticleSystem *, psys, &ob->particlesystem) {
       if (!DRW_object_is_visible_psys_in_active_context(ob, psys)) {
@@ -110,9 +110,8 @@ class Prepass {
       if (draw_as == PART_DRAW_PATH && part->draw_as == PART_DRAW_REND) {
         /* Case where the render engine should have rendered it, but we need to draw it for
          * selection purpose. */
-        if (handle.raw == 0u) {
-          handle = manager.resource_handle_for_psys(ob_ref,
-                                                    DRW_particles_dupli_matrix_get(ob_ref));
+        if (!handle.is_valid()) {
+          handle = manager.resource_handle_for_psys(ob_ref, ob_ref.particles_matrix());
         }
 
         gpu::Batch *geom = DRW_cache_particles_get_hair(ob, psys, nullptr);
@@ -124,7 +123,7 @@ class Prepass {
 
   void sculpt_sync(Manager &manager, const ObjectRef &ob_ref)
   {
-    ResourceHandle handle = manager.resource_handle_for_sculpt(ob_ref);
+    ResourceHandleRange handle = manager.unique_handle_for_sculpt(ob_ref);
 
     for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_DEFAULT)) {
       mesh_ps_->draw(batch.batch, handle);
@@ -174,7 +173,7 @@ class Prepass {
       return;
     }
 
-    ResourceHandle res_handle = manager.unique_handle(ob_ref);
+    ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 
     for (int material_id : geom_list.index_range()) {
       pass->draw(geom_list[material_id], res_handle);
@@ -259,8 +258,6 @@ class Instance : public DrawEngine {
     /* Render result draw. */
     const RenderEngineType *type = render_engine->type;
     type->view_draw(render_engine, draw_ctx->evil_C, draw_ctx->depsgraph);
-
-    GPU_bgl_end();
 
     GPU_matrix_pop();
     GPU_matrix_pop_projection();
@@ -363,7 +360,6 @@ class Instance : public DrawEngine {
     GPU_matrix_pop_projection();
 
     blender::draw::command::StateSet::set();
-    GPU_bgl_end();
 
     RE_engine_draw_release(re);
   }

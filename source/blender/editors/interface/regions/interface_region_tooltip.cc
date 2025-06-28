@@ -71,8 +71,6 @@
 #include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
-#include "UI_interface.hh"
-
 #include "BLF_api.hh"
 #include "BLT_translation.hh"
 
@@ -321,7 +319,8 @@ static void ui_tooltip_region_draw_cb(const bContext * /*C*/, ARegion *region)
       if (field->image->border) {
         GPU_blend(GPU_BLEND_ALPHA);
         GPUVertFormat *format = immVertexFormat();
-        uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        uint pos = GPU_vertformat_attr_add(
+            format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
         immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
         float border_color[4] = {1.0f, 1.0f, 1.0f, 0.15f};
         float bgcolor[4];

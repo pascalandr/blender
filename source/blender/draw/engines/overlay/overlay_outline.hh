@@ -210,7 +210,7 @@ class Outline : Overlay {
 
       for (FlatObjectRef flag_ob_ref : flat_objects_) {
         flag_ob_ref.if_flat_axis_orthogonal_to_view(
-            manager, view, [&](gpu::Batch *geom, ResourceHandle handle) {
+            manager, view, [&](gpu::Batch *geom, ResourceHandleRange handle) {
               pass.draw_expand(geom, GPU_PRIM_LINES, 1, 1, handle);
             });
       }
@@ -239,7 +239,7 @@ class Outline : Overlay {
     int2 render_size = int2(res.depth_tx.size());
 
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-    tmp_depth_tx_.acquire(render_size, GPU_DEPTH24_STENCIL8, usage);
+    tmp_depth_tx_.acquire(render_size, GPU_DEPTH32F_STENCIL8, usage);
     object_id_tx_.acquire(render_size, GPU_R16UI, usage);
 
     prepass_fb_.ensure(GPU_ATTACHMENT_TEXTURE(tmp_depth_tx_),

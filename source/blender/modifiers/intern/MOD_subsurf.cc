@@ -36,7 +36,7 @@
 #include "BKE_subdiv_mesh.hh"
 #include "BKE_subdiv_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RE_engine.h"
@@ -393,7 +393,7 @@ static void panel_draw(const bContext *C, Panel *panel)
 
   layout->prop(ptr, "subdivision_type", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   uiLayout *col = &layout->column(true);
   col->prop(ptr, "levels", UI_ITEM_NONE, IFACE_("Levels Viewport"), ICON_NONE);
@@ -433,7 +433,7 @@ static void panel_draw(const bContext *C, Panel *panel)
         "use_adaptive_subdivision",
         IFACE_("Adaptive Subdivision"));
     if (adaptive_panel.body) {
-      uiLayoutSetActive(adaptive_panel.body, ob_use_adaptive_subdivision);
+      adaptive_panel.body->active_set(ob_use_adaptive_subdivision);
       adaptive_panel.body->prop(
           &ob_cycles_ptr, "dicing_rate", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
@@ -455,13 +455,12 @@ static void panel_draw(const bContext *C, Panel *panel)
   if (uiLayout *advanced_layout = layout->panel_prop(
           C, ptr, "open_advanced_panel", IFACE_("Advanced")))
   {
-    uiLayoutSetPropSep(advanced_layout, true);
+    advanced_layout->use_property_split_set(true);
 
     advanced_layout->prop(ptr, "use_limit_surface", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
     uiLayout *col = &advanced_layout->column(true);
-    uiLayoutSetActive(col,
-                      ob_use_adaptive_subdivision || RNA_boolean_get(ptr, "use_limit_surface"));
+    col->active_set(ob_use_adaptive_subdivision || RNA_boolean_get(ptr, "use_limit_surface"));
     col->prop(ptr, "quality", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
     advanced_layout->prop(ptr, "uv_smooth", UI_ITEM_NONE, std::nullopt, ICON_NONE);

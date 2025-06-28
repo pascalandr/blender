@@ -74,12 +74,8 @@ set(SRC
   nodes/node_composite_lensdist.cc
   nodes/node_composite_levels.cc
   nodes/node_composite_luma_matte.cc
-  nodes/node_composite_map_range.cc
   nodes/node_composite_map_uv.cc
-  nodes/node_composite_map_value.cc
   nodes/node_composite_mask.cc
-  nodes/node_composite_math.cc
-  nodes/node_composite_mixrgb.cc
   nodes/node_composite_movieclip.cc
   nodes/node_composite_moviedistortion.cc
   nodes/node_composite_normal.cc
@@ -94,24 +90,17 @@ set(SRC
   nodes/node_composite_scale.cc
   nodes/node_composite_scene_time.cc
   nodes/node_composite_sepcomb_color.cc
-  nodes/node_composite_sepcomb_hsva.cc
-  nodes/node_composite_sepcomb_rgba.cc
-  nodes/node_composite_sepcomb_xyz.cc
-  nodes/node_composite_sepcomb_ycca.cc
-  nodes/node_composite_sepcomb_yuva.cc
   nodes/node_composite_setalpha.cc
   nodes/node_composite_split.cc
   nodes/node_composite_stabilize2d.cc
   nodes/node_composite_sunbeams.cc
   nodes/node_composite_switch.cc
   nodes/node_composite_switchview.cc
-  nodes/node_composite_texture.cc
   nodes/node_composite_tonemap.cc
   nodes/node_composite_trackpos.cc
   nodes/node_composite_transform.cc
   nodes/node_composite_translate.cc
   nodes/node_composite_val_to_rgb.cc
-  nodes/node_composite_value.cc
   nodes/node_composite_vec_blur.cc
   nodes/node_composite_viewer.cc
   nodes/node_composite_zcombine.cc

@@ -38,6 +38,7 @@
 #include "ED_outliner.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "armature_intern.hh"
@@ -1094,7 +1095,7 @@ static void move_to_collection_menu_create(bContext *C, uiLayout *layout, void *
 
   /* The "Create a new collection" mode of this operator has its own menu, and should thus be
    * invoked. */
-  uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_DEFAULT);
+  layout->operator_context_set(WM_OP_INVOKE_DEFAULT);
   PointerRNA op_ptr = layout->op(
       is_move_operation ? "ARMATURE_OT_move_to_collection" : "ARMATURE_OT_assign_to_collection",
       CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "New Bone Collection"),
@@ -1105,7 +1106,7 @@ static void move_to_collection_menu_create(bContext *C, uiLayout *layout, void *
 
   /* The remaining operators in this menu should be executed on click. Invoking
    * them would show this same menu again. */
-  uiLayoutSetOperatorContext(layout, WM_OP_EXEC_DEFAULT);
+  layout->operator_context_set(WM_OP_EXEC_DEFAULT);
 
   int child_index, child_count;
   if (parent_bcoll_index == -1) {
@@ -1133,7 +1134,7 @@ static void move_to_collection_menu_create(bContext *C, uiLayout *layout, void *
     /* Avoid assigning/moving to a linked bone collection. */
     if (!ANIM_armature_bonecoll_is_editable(arm, bcoll)) {
       uiLayout *sub = &layout->row(false);
-      uiLayoutSetEnabled(sub, false);
+      sub->enabled_set(false);
 
       menu_add_item_for_move_assign_unassign(sub, arm, bcoll, index, is_move_operation);
       continue;

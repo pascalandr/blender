@@ -12,6 +12,8 @@
 
 #include <functional>
 
+#include "BKE_mesh_wrapper.hh"
+#include "BKE_subdiv_modifier.hh"
 #include "BLI_math_vector_types.hh"
 #include "DNA_object_enums.h"
 #include "DNA_object_types.h"
@@ -55,7 +57,7 @@ struct GSet;
 struct GPUViewport;
 namespace blender::draw {
 class TextureFromPool;
-struct ObjectRef;
+class ObjectRef;
 class Manager;
 }  // namespace blender::draw
 
@@ -68,7 +70,6 @@ struct DrawEngine {
   static constexpr int GPU_INFO_SIZE = 512; /* IMA_MAX_RENDER_TEXT_SIZE */
 
   char info[GPU_INFO_SIZE] = {'\0'};
-  DRWTextStore *text_draw_cache = nullptr;
 
   bool used = false;
 
@@ -192,7 +193,17 @@ template<typename T> T &DRW_object_get_data_for_drawing(const Object &object)
   return *static_cast<T *>(object.data);
 }
 
-template<> Mesh &DRW_object_get_data_for_drawing(const Object &object);
+template<> inline Mesh &DRW_object_get_data_for_drawing(const Object &object)
+{
+  /* For drawing we want either the base mesh if GPU subdivision is enabled, or the
+   * tessellated mesh if GPU subdivision is disabled. */
+  BLI_assert(object.type == OB_MESH);
+  Mesh &mesh = *static_cast<Mesh *>(object.data);
+  if (BKE_subsurf_modifier_has_gpu_subdiv(&mesh)) {
+    return mesh;
+  }
+  return *BKE_mesh_wrapper_ensure_subdivision(&mesh);
+}
 
 /**
  * Same as DRW_object_get_data_for_drawing, but for the editmesh cage,
@@ -263,7 +274,6 @@ struct DRWContext {
 
   struct {
     bool draw_background = false;
-    bool draw_text = false;
   } options;
 
   /** Convenience pointer to text_store owned by the viewport */

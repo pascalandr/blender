@@ -22,6 +22,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
 #include "BLI_rect.h"
+#include "BLI_time.h"
 
 #include "BLT_translation.hh"
 
@@ -66,7 +67,7 @@ static blender::gpu::Batch *batch_screen_edges_get(int *corner_len)
 
   if (screen_edges_batch == nullptr) {
     GPUVertFormat format = {0};
-    uint pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    uint pos = GPU_vertformat_attr_add(&format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
 
     blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
     GPU_vertbuf_data_alloc(*vbo, CORNER_RESOLUTION * 2 * 4 + 2);
@@ -107,20 +108,8 @@ static void drawscredge_area(const ScrArea &area, float edge_thickness)
   GPU_batch_draw(batch);
 }
 
-void ED_screen_draw_edges(wmWindow *win)
+static void screen_draw_editor_outlines(bScreen *screen, wmWindow *win)
 {
-  bScreen *screen = WM_window_get_active_screen(win);
-  screen->do_draw = false;
-
-  if (screen->state != SCREENNORMAL) {
-    return;
-  }
-
-  if (BLI_listbase_is_single(&screen->areabase) && win->global_areas.areabase.first == nullptr) {
-    /* Do not show edges on windows without global areas and with only one editor. */
-    return;
-  }
-
   ARegion *region = screen->active_region;
   ScrArea *active_area = nullptr;
 
@@ -148,6 +137,60 @@ void ED_screen_draw_edges(wmWindow *win)
     if (active_area && !BLI_listbase_is_empty(&win->drawcalls)) {
       active_area = nullptr;
     }
+  }
+
+  static ScrArea *current_active_area = nullptr;
+  static ScrArea *last_active_area = nullptr;
+  double now = BLI_time_now_seconds();
+  static double start_time = now;
+  double end_time = start_time + AREA_ACTIVE_FADEIN;
+
+  if (active_area != current_active_area) {
+    if (now > start_time + AREA_ACTIVE_FADEIN) {
+      start_time = now;
+      end_time = start_time + AREA_ACTIVE_FADEIN;
+    }
+    last_active_area = current_active_area;
+    current_active_area = active_area;
+  }
+
+  float col_inactive[4];
+  float col_active[4];
+  float col_active_last[4];
+  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE_ACTIVE, col_active);
+  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE, col_inactive);
+  copy_v4_v4(col_active_last, col_inactive);
+
+  if (now < end_time) {
+    const float factor = pow((now - start_time) / (end_time - start_time), 2);
+    UI_GetThemeColorBlend4f(TH_EDITOR_OUTLINE, TH_EDITOR_OUTLINE_ACTIVE, factor, col_active);
+    UI_GetThemeColorBlend4f(TH_EDITOR_OUTLINE_ACTIVE, TH_EDITOR_OUTLINE, factor, col_active_last);
+    screen->do_refresh = true;
+  }
+
+  rctf bounds;
+  UI_draw_roundbox_corner_set(UI_CNR_ALL);
+  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+    BLI_rctf_rcti_copy(&bounds, &area->totrct);
+    float *color = (area == active_area)      ? col_active :
+                   (area == last_active_area) ? col_active_last :
+                                                col_inactive;
+    UI_draw_roundbox_4fv_ex(&bounds, nullptr, nullptr, 1.0f, color, U.pixelsize, EDITORRADIUS);
+  }
+}
+
+void ED_screen_draw_edges(wmWindow *win)
+{
+  bScreen *screen = WM_window_get_active_screen(win);
+  screen->do_draw = false;
+
+  if (screen->state != SCREENNORMAL) {
+    return;
+  }
+
+  if (BLI_listbase_is_single(&screen->areabase) && win->global_areas.areabase.first == nullptr) {
+    /* Do not show edges on windows without global areas and with only one editor. */
+    return;
   }
 
   rcti scissor_rect;
@@ -195,25 +238,10 @@ void ED_screen_draw_edges(wmWindow *win)
     drawscredge_area(*area, edge_thickness);
   }
 
-  float outline1[4];
-  float outline2[4];
-  rctf bounds;
-  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE, outline1);
-  UI_GetThemeColor4fv(TH_EDITOR_OUTLINE_ACTIVE, outline2);
-  UI_draw_roundbox_corner_set(UI_CNR_ALL);
-  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-    BLI_rctf_rcti_copy(&bounds, &area->totrct);
-    UI_draw_roundbox_4fv_ex(&bounds,
-                            nullptr,
-                            nullptr,
-                            1.0f,
-                            (area == active_area) ? outline2 : outline1,
-                            U.pixelsize,
-                            EDITORRADIUS);
-  }
-
   GPU_blend(GPU_BLEND_NONE);
   GPU_scissor_test(false);
+
+  screen_draw_editor_outlines(screen, win);
 }
 
 void screen_draw_move_highlight(const wmWindow *win, bScreen *screen, eScreenAxis dir_axis)
@@ -462,7 +490,8 @@ void screen_draw_join_highlight(const wmWindow *win, ScrArea *sa1, ScrArea *sa2,
 static void rounded_corners(rctf rect, float color[4], int corners)
 {
   GPUVertFormat *format = immVertexFormat();
-  const uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  const uint pos = GPU_vertformat_attr_add(
+      format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
 
   const float rad = EDITORRADIUS;
 
@@ -665,4 +694,82 @@ void screen_draw_split_preview(ScrArea *area, const eScreenAxis dir_axis, const 
     rect.xmax = x + half_line_width;
   }
   UI_draw_roundbox_4fv(&rect, true, 0.0f, border);
+}
+
+struct AreaAnimateHighlightData {
+  wmWindow *win;
+  bScreen *screen;
+  rctf rect;
+  float inner[4];
+  float outline[4];
+  double start_time;
+  double end_time;
+  void *draw_callback;
+};
+
+static void area_animate_highlight_cb(const wmWindow * /*win*/, void *userdata)
+{
+  const AreaAnimateHighlightData *data = static_cast<const AreaAnimateHighlightData *>(userdata);
+
+  double now = BLI_time_now_seconds();
+  if (now > data->end_time) {
+    WM_draw_cb_exit(data->win, data->draw_callback);
+    MEM_freeN(const_cast<AreaAnimateHighlightData *>(data));
+    data = nullptr;
+    return;
+  }
+
+  const float factor = pow((now - data->start_time) / (data->end_time - data->start_time), 2);
+  const bool do_inner = data->inner[3] > 0.0f;
+  const bool do_outline = data->outline[3] > 0.0f;
+
+  float inner_color[4];
+  if (do_inner) {
+    inner_color[0] = data->inner[0];
+    inner_color[1] = data->inner[1];
+    inner_color[2] = data->inner[2];
+    inner_color[3] = (1.0f - factor) * data->inner[3];
+  }
+
+  float outline_color[4];
+  if (do_outline) {
+    outline_color[0] = data->outline[0];
+    outline_color[1] = data->outline[1];
+    outline_color[2] = data->outline[2];
+    outline_color[3] = (1.0f - factor) * data->outline[3];
+  }
+
+  UI_draw_roundbox_corner_set(UI_CNR_ALL);
+  UI_draw_roundbox_4fv_ex(&data->rect,
+                          do_inner ? inner_color : nullptr,
+                          nullptr,
+                          1.0f,
+                          do_outline ? outline_color : nullptr,
+                          U.pixelsize,
+                          EDITORRADIUS);
+
+  data->screen->do_refresh = true;
+}
+
+void screen_animate_area_highlight(wmWindow *win,
+                                   bScreen *screen,
+                                   const rcti *rect,
+                                   float inner[4],
+                                   float outline[4],
+                                   float seconds)
+{
+  AreaAnimateHighlightData *data = MEM_callocN<AreaAnimateHighlightData>(
+      "screen_animate_area_highlight");
+  data->win = win;
+  data->screen = screen;
+  BLI_rctf_rcti_copy(&data->rect, rect);
+  if (inner) {
+    copy_v4_v4(data->inner, inner);
+  }
+  if (outline) {
+    copy_v4_v4(data->outline, outline);
+  }
+  data->start_time = BLI_time_now_seconds();
+  data->end_time = data->start_time + seconds;
+  data->draw_callback = WM_draw_cb_activate(win, area_animate_highlight_cb, data);
 }

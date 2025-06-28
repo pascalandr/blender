@@ -216,8 +216,7 @@ typedef struct UserDef_Experimental {
   char use_all_linked_data_direct;
   char use_extensions_debug;
   char use_recompute_usercount_on_save_debug;
-  char write_large_blend_file_blocks;
-  char use_attribute_storage_write;
+  char write_legacy_blend_file_format;
   char SANITIZE_AFTER_HERE;
   /* The following options are automatically sanitized (set to 0)
    * when the release cycle is not alpha. */
@@ -228,6 +227,7 @@ typedef struct UserDef_Experimental {
   char use_shader_node_previews;
   char use_bundle_and_closure_nodes;
   char use_socket_structure_type;
+  char use_vulkan_hdr;
   char _pad[4];
 } UserDef_Experimental;
 
@@ -513,10 +513,11 @@ typedef struct UserDef {
   /** Curve non-linearity parameter. */
   float pressure_softness;
 
-  /** Overall sensitivity of 3D mouse. */
-  float ndof_sensitivity;
-  float ndof_orbit_sensitivity;
-  /** Dead-zone of 3D mouse. */
+  /** 3D mouse: overall translation sensitivity. */
+  float ndof_translation_sensitivity;
+  /** 3D mouse: overall rotation sensitivity. */
+  float ndof_rotation_sensitivity;
+  /** 3D mouse: dead-zone. */
   float ndof_deadzone;
   /** #eNdof_Flag, flags for 3D mouse. */
   int ndof_flag;
@@ -806,7 +807,7 @@ typedef enum eUserpref_UI_Flag2 {
 
 /** #UserDef.gpu_flag */
 typedef enum eUserpref_GPU_Flag {
-  USER_GPU_FLAG_NO_DEPT_PICK = (1 << 0), /* Unused. To be removed. */
+  USER_GPU_FLAG_UNUSED_0 = (1 << 0), /* Unused. To be removed. */
   USER_GPU_FLAG_NO_EDIT_MODE_SMOOTH_WIRE = (1 << 1),
   USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE = (1 << 2),
   USER_GPU_FLAG_SUBDIVISION_EVALUATION = (1 << 3),
@@ -1015,11 +1016,11 @@ typedef enum eNdof_Flag {
   NDOF_SHOULD_ROTATE = (1 << 5),
 
   // NDOF_UNUSED_6 = (1 << 6), /* Dirty. */
-
-  /* actually... users probably don't care about what the mode
-   * is called, just that it feels right */
-  /* zoom is up/down if this flag is set (otherwise forward/backward) */
-  NDOF_PAN_YZ_SWAP_AXIS = (1 << 7),
+  /**
+   * When set translation results in zoom being up/down otherwise forward/backward
+   * This also swaps Y/Z for rotation.
+   */
+  NDOF_SWAP_YZ_AXIS = (1 << 7),
   // NDOF_UNUSED_8 = (1 << 8), /* Dirty. */
   NDOF_ROTX_INVERT_AXIS = (1 << 9),
   NDOF_ROTY_INVERT_AXIS = (1 << 10),
@@ -1125,7 +1126,7 @@ typedef enum eUserpref_SeqProxySetup {
 } eUserpref_SeqProxySetup;
 
 typedef enum eUserpref_SeqEditorFlags {
-  USER_SEQ_ED_SIMPLE_TWEAKING = (1 << 0),
+  USER_SEQ_ED_UNUSED_0 = (1 << 0), /* Dirty. */
   USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT = (1 << 1),
 } eUserpref_SeqEditorFlags;
 

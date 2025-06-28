@@ -10,7 +10,7 @@
 #include "BLI_math_angle_types.hh"
 #include "BLI_math_matrix.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "COM_node_operation.hh"
@@ -26,14 +26,11 @@ static void cmp_node_rotate_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .compositor_realization_mode(CompositorInputRealizationMode::None)
-      .compositor_domain_priority(0);
-  b.add_input<decl::Float>("Degr")
-      .default_value(0.0f)
-      .min(-10000.0f)
-      .max(10000.0f)
-      .subtype(PROP_ANGLE)
-      .compositor_expects_single_value();
-  b.add_output<decl::Color>("Image");
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Float>("Angle").default_value(0.0f).min(-10000.0f).max(10000.0f).subtype(
+      PROP_ANGLE);
+
+  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
 }
 
 static void node_composit_init_rotate(bNodeTree * /*ntree*/, bNode *node)
@@ -54,14 +51,15 @@ class RotateOperation : public NodeOperation {
 
   void execute() override
   {
-    const math::AngleRadian rotation = this->get_input("Degr").get_single_value_default(0.0f);
+    const math::AngleRadian rotation = this->get_input("Angle").get_single_value_default(0.0f);
     const float3x3 transformation = math::from_rotation<float3x3>(rotation);
 
     const Result &input = this->get_input("Image");
     Result &output = this->get_result("Image");
     output.share_data(input);
     output.transform(transformation);
-    output.get_realization_options().interpolation = this->get_interpolation();
+    Interpolation interpolation = this->get_interpolation();
+    output.get_realization_options().interpolation = interpolation;
   }
 
   Interpolation get_interpolation()
@@ -71,6 +69,7 @@ class RotateOperation : public NodeOperation {
         return Interpolation::Nearest;
       case CMP_NODE_INTERPOLATION_BILINEAR:
         return Interpolation::Bilinear;
+      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
       case CMP_NODE_INTERPOLATION_BICUBIC:
         return Interpolation::Bicubic;
     }

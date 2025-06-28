@@ -86,6 +86,7 @@ ccl_device_inline void shader_setup_from_ray(KernelGlobals kg,
       triangle_shader_setup(kg, sd);
     }
     else {
+      kernel_assert(sd->type == PRIMITIVE_MOTION_TRIANGLE);
       /* motion triangle */
       motion_triangle_shader_setup(kg, sd);
     }
@@ -401,8 +402,7 @@ ccl_device_inline void shader_setup_from_background(KernelGlobals kg,
 /* ShaderData setup from point inside volume */
 
 #ifdef __VOLUME__
-ccl_device_inline void shader_setup_from_volume(KernelGlobals kg,
-                                                ccl_private ShaderData *ccl_restrict sd,
+ccl_device_inline void shader_setup_from_volume(ccl_private ShaderData *ccl_restrict sd,
                                                 const ccl_private Ray *ccl_restrict ray,
                                                 const int object)
 {

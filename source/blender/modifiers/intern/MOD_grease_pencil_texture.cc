@@ -26,7 +26,7 @@
 
 #include "DEG_depsgraph_query.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "BLT_translation.hh"
@@ -310,7 +310,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   const auto mode = GreasePencilTextureModifierMode(tmd.mode);
   uiLayout *col;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   layout->prop(ptr, "mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 

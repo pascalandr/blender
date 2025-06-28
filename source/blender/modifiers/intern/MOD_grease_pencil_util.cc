@@ -30,6 +30,7 @@
 #include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 
 #include "GEO_resample_curves.hh"
 
@@ -100,39 +101,37 @@ void draw_layer_filter_settings(const bContext * /*C*/, uiLayout *layout, Pointe
   const bool use_layer_group_filter = RNA_boolean_get(ptr, "use_layer_group_filter");
   uiLayout *row, *col, *sub, *subsub;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(true);
   row = &col->row(true);
-  uiLayoutSetPropDecorate(row, false);
+  row->use_property_decorate_set(false);
   if (use_layer_group_filter) {
-    uiItemPointerR(row,
-                   ptr,
-                   "tree_node_filter",
-                   &obj_data_ptr,
-                   "layer_groups",
-                   "Group",
-                   ICON_GREASEPENCIL_LAYER_GROUP);
+    row->prop_search(ptr,
+                     "tree_node_filter",
+                     &obj_data_ptr,
+                     "layer_groups",
+                     "Group",
+                     ICON_GREASEPENCIL_LAYER_GROUP);
   }
   else {
-    uiItemPointerR(row,
-                   ptr,
-                   "tree_node_filter",
-                   &obj_data_ptr,
-                   "layers",
-                   std::nullopt,
-                   ICON_OUTLINER_DATA_GP_LAYER);
+    row->prop_search(ptr,
+                     "tree_node_filter",
+                     &obj_data_ptr,
+                     "layers",
+                     std::nullopt,
+                     ICON_OUTLINER_DATA_GP_LAYER);
   }
   sub = &row->row(true);
   sub->prop(ptr, "use_layer_group_filter", UI_ITEM_NONE, "", ICON_GREASEPENCIL_LAYER_GROUP);
   sub->prop(ptr, "invert_layer_filter", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
 
   row = &col->row(true, IFACE_("Layer Pass"));
-  uiLayoutSetPropDecorate(row, false);
+  row->use_property_decorate_set(false);
   sub = &row->row(true);
   sub->prop(ptr, "use_layer_pass_filter", UI_ITEM_NONE, "", ICON_NONE);
   subsub = &sub->row(true);
-  uiLayoutSetActive(subsub, use_layer_pass);
+  subsub->active_set(use_layer_pass);
   subsub->prop(ptr, "layer_pass_filter", UI_ITEM_NONE, "", ICON_NONE);
   subsub->prop(ptr, "invert_layer_pass_filter", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
 }
@@ -144,22 +143,22 @@ void draw_material_filter_settings(const bContext * /*C*/, uiLayout *layout, Poi
   const bool use_material_pass = RNA_boolean_get(ptr, "use_material_pass_filter");
   uiLayout *row, *col, *sub, *subsub;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(true);
   row = &col->row(true);
-  uiLayoutSetPropDecorate(row, false);
-  uiItemPointerR(
-      row, ptr, "material_filter", &obj_data_ptr, "materials", std::nullopt, ICON_SHADING_TEXTURE);
+  row->use_property_decorate_set(false);
+  row->prop_search(
+      ptr, "material_filter", &obj_data_ptr, "materials", std::nullopt, ICON_SHADING_TEXTURE);
   sub = &row->row(true);
   sub->prop(ptr, "invert_material_filter", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
 
   row = &col->row(true, IFACE_("Material Pass"));
-  uiLayoutSetPropDecorate(row, false);
+  row->use_property_decorate_set(false);
   sub = &row->row(true);
   sub->prop(ptr, "use_material_pass_filter", UI_ITEM_NONE, "", ICON_NONE);
   subsub = &sub->row(true);
-  uiLayoutSetActive(subsub, use_material_pass);
+  subsub->active_set(use_material_pass);
   subsub->prop(ptr, "material_pass_filter", UI_ITEM_NONE, "", ICON_NONE);
   subsub->prop(ptr, "invert_material_pass_filter", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
 }
@@ -170,15 +169,15 @@ void draw_vertex_group_settings(const bContext * /*C*/, uiLayout *layout, Pointe
   bool has_vertex_group = RNA_string_length(ptr, "vertex_group_name") != 0;
   uiLayout *row, *col, *sub;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(true);
   row = &col->row(true);
-  uiLayoutSetPropDecorate(row, false);
-  uiItemPointerR(row, ptr, "vertex_group_name", &ob_ptr, "vertex_groups", std::nullopt, ICON_NONE);
+  row->use_property_decorate_set(false);
+  row->prop_search(ptr, "vertex_group_name", &ob_ptr, "vertex_groups", std::nullopt, ICON_NONE);
   sub = &row->row(true);
-  uiLayoutSetActive(sub, has_vertex_group);
-  uiLayoutSetPropDecorate(sub, false);
+  sub->active_set(has_vertex_group);
+  sub->use_property_decorate_set(false);
   sub->prop(ptr, "invert_vertex_group", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
 }
 
@@ -187,9 +186,9 @@ void draw_custom_curve_settings(const bContext * /*C*/, uiLayout *layout, Pointe
   bool use_custom_curve = RNA_boolean_get(ptr, "use_custom_curve");
   uiLayout *row;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
   row = &layout->row(true);
-  uiLayoutSetPropDecorate(row, false);
+  row->use_property_decorate_set(false);
   row->prop(ptr, "use_custom_curve", UI_ITEM_NONE, IFACE_("Custom Curve"), ICON_NONE);
   if (use_custom_curve) {
     uiTemplateCurveMapping(layout, ptr, "custom_curve", 0, false, false, false, false);

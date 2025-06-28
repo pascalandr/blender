@@ -163,8 +163,8 @@ class Particles : Overlay {
 
     Object *ob = ob_ref.object;
 
-    ResourceHandle handle = manager.resource_handle_for_psys(
-        ob_ref, DRW_particles_dupli_matrix_get(ob_ref));
+    ResourceHandleRange handle = manager.resource_handle_for_psys(ob_ref,
+                                                                  ob_ref.particles_matrix());
 
     {
       gpu::Batch *geom = DRW_cache_particles_get_edit_strands(ob, psys, edit, show_weight_);
@@ -191,15 +191,15 @@ class Particles : Overlay {
 
     Object *ob = ob_ref.object;
 
-    ResourceHandle handle = {0};
+    ResourceHandleRange handle = {0};
 
     for (ParticleSystem *psys : ListBaseWrapper<ParticleSystem>(&ob->particlesystem)) {
       if (!DRW_object_is_visible_psys_in_active_context(ob, psys)) {
         continue;
       }
 
-      if (handle.raw == 0u) {
-        handle = manager.resource_handle_for_psys(ob_ref, DRW_particles_dupli_matrix_get(ob_ref));
+      if (!handle.is_valid()) {
+        handle = manager.resource_handle_for_psys(ob_ref, ob_ref.particles_matrix());
       }
 
       const ParticleSettings *part = psys->part;

@@ -18,6 +18,7 @@
 #include "RNA_access.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "COM_algorithm_morphological_blur.hh"
@@ -37,10 +38,10 @@ static void cmp_node_defocus_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
-      .compositor_domain_priority(0);
-  b.add_input<decl::Float>("Z").default_value(1.0f).min(0.0f).max(1.0f).compositor_domain_priority(
-      1);
-  b.add_output<decl::Color>("Image");
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Float>("Z").default_value(1.0f).min(0.0f).max(1.0f).structure_type(
+      StructureType::Dynamic);
+  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
 }
 
 static void node_composit_init_defocus(bNodeTree * /*ntree*/, bNode *node)
@@ -49,8 +50,6 @@ static void node_composit_init_defocus(bNodeTree * /*ntree*/, bNode *node)
   NodeDefocus *nbd = MEM_callocN<NodeDefocus>(__func__);
   nbd->bktype = 0;
   nbd->rotation = 0.0f;
-  nbd->gamco = 0;
-  nbd->samples = 16;
   nbd->fstop = 128.0f;
   nbd->maxblur = 16;
   nbd->scale = 1.0f;
@@ -68,7 +67,7 @@ static void node_composit_buts_defocus(uiLayout *layout, bContext *C, PointerRNA
   col->prop(ptr, "angle", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 
   col = &layout->column(false);
-  uiLayoutSetActive(col, RNA_boolean_get(ptr, "use_zbuffer") == true);
+  col->active_set(RNA_boolean_get(ptr, "use_zbuffer") == true);
   col->prop(ptr, "f_stop", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 
   layout->prop(ptr, "blur_max", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
@@ -78,7 +77,7 @@ static void node_composit_buts_defocus(uiLayout *layout, bContext *C, PointerRNA
   col = &layout->column(false);
   col->prop(ptr, "use_zbuffer", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
   sub = &col->column(false);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_zbuffer") == false);
+  sub->active_set(RNA_boolean_get(ptr, "use_zbuffer") == false);
   sub->prop(ptr, "z_scale", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 }
 

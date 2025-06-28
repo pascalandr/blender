@@ -25,86 +25,6 @@ namespace blender::eevee {
 class Instance;
 
 /* -------------------------------------------------------------------- */
-/** \name ObjectKey
- *
- * Unique key to identify each object in the hash-map.
- * Note that we get a unique key for each object component.
- * \{ */
-
-class ObjectKey {
-  /** Hash value of the key. */
-  uint64_t hash_value_ = 0;
-  /** Original Object or source object for duplis. */
-  Object *ob_ = nullptr;
-  /** Original Parent object for duplis. */
-  Object *parent_ = nullptr;
-  /** Dupli objects recursive unique identifier */
-  int id_[MAX_DUPLI_RECUR];
-  /** Used for particle system hair. */
-  int sub_key_ = 0;
-
- public:
-  ObjectKey() = default;
-
-  ObjectKey(const ObjectRef &ob_ref, int sub_key = 0)
-  {
-    ob_ = DEG_get_original(ob_ref.object);
-    hash_value_ = get_default_hash(ob_);
-
-    if (DupliObject *dupli = ob_ref.dupli_object) {
-      parent_ = ob_ref.dupli_parent;
-      hash_value_ = get_default_hash(hash_value_, get_default_hash(parent_));
-      for (int i : IndexRange(MAX_DUPLI_RECUR)) {
-        id_[i] = dupli->persistent_id[i];
-        if (id_[i] == INT_MAX) {
-          break;
-        }
-        hash_value_ = get_default_hash(hash_value_, get_default_hash(id_[i]));
-      }
-    }
-
-    if (sub_key != 0) {
-      sub_key_ = sub_key;
-      hash_value_ = get_default_hash(hash_value_, get_default_hash(sub_key_));
-    }
-  }
-
-  uint64_t hash() const
-  {
-    return hash_value_;
-  }
-
-  bool operator==(const ObjectKey &k) const
-  {
-    if (hash_value_ != k.hash_value_) {
-      return false;
-    }
-    if (ob_ != k.ob_) {
-      return false;
-    }
-    if (parent_ != k.parent_) {
-      return false;
-    }
-    if (sub_key_ != k.sub_key_) {
-      return false;
-    }
-    if (parent_) {
-      for (int i : IndexRange(MAX_DUPLI_RECUR)) {
-        if (id_[i] != k.id_[i]) {
-          return false;
-        }
-        if (id_[i] == INT_MAX) {
-          break;
-        }
-      }
-    }
-    return true;
-  }
-};
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Sync Module
  *
  * \{ */
@@ -141,13 +61,14 @@ class SyncModule {
   void sync_curves(Object *ob,
                    ObjectHandle &ob_handle,
                    const ObjectRef &ob_ref,
-                   ResourceHandle res_handle = 0,
+                   ResourceHandleRange res_handle = {},
                    ModifierData *modifier_data = nullptr,
                    ParticleSystem *particle_sys = nullptr);
 };
 
 using HairHandleCallback = FunctionRef<void(ObjectHandle, ModifierData &, ParticleSystem &)>;
-void foreach_hair_particle_handle(ObjectRef &ob_ref,
+void foreach_hair_particle_handle(Instance &inst,
+                                  ObjectRef &ob_ref,
                                   ObjectHandle ob_handle,
                                   HairHandleCallback callback);
 

@@ -43,7 +43,7 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "ED_node.hh"
@@ -153,13 +153,7 @@ static void buttons_texture_users_find_nodetree(ListBase *users,
 {
   if (ntree) {
     for (bNode *node : ntree->all_nodes()) {
-      if (node->type_legacy == CMP_NODE_TEXTURE) {
-        PointerRNA ptr = RNA_pointer_create_discrete(&ntree->id, &RNA_Node, node);
-        PropertyRNA *prop = RNA_struct_find_property(&ptr, "texture");
-        buttons_texture_user_node_add(
-            users, id, ntree, node, ptr, prop, category, RNA_struct_ui_icon(ptr.type), node->name);
-      }
-      else if (node->typeinfo->nclass == NODE_CLASS_TEXTURE) {
+      if (node->typeinfo->nclass == NODE_CLASS_TEXTURE) {
         PointerRNA ptr = RNA_pointer_create_discrete(&ntree->id, &RNA_Node, node);
         buttons_texture_user_node_add(users,
                                       id,
@@ -292,8 +286,9 @@ static void buttons_texture_users_from_context(ListBase *users,
   /* fill users */
   BLI_listbase_clear(users);
 
-  if (scene && scene->nodetree) {
-    buttons_texture_users_find_nodetree(users, &scene->id, scene->nodetree, N_("Compositor"));
+  if (scene && scene->compositing_node_group) {
+    buttons_texture_users_find_nodetree(
+        users, &scene->id, scene->compositing_node_group, N_("Compositor"));
   }
 
   if (linestyle && !limited_mode) {
@@ -491,7 +486,7 @@ static void template_texture_user_menu(bContext *C, uiLayout *layout, void * /*a
   /* callback when opening texture user selection menu, to create buttons. */
   SpaceProperties *sbuts = CTX_wm_space_properties(C);
   ButsContextTexture *ct = static_cast<ButsContextTexture *>(sbuts->texuser);
-  uiBlock *block = uiLayoutGetBlock(layout);
+  uiBlock *block = layout->block();
   const char *last_category = nullptr;
 
   LISTBASE_FOREACH (ButsTextureUser *, user, &ct->users) {
@@ -552,7 +547,7 @@ void uiTemplateTextureUser(uiLayout *layout, bContext *C)
    * display the current item. */
   SpaceProperties *sbuts = CTX_wm_space_properties(C);
   ButsContextTexture *ct = (sbuts) ? static_cast<ButsContextTexture *>(sbuts->texuser) : nullptr;
-  uiBlock *block = uiLayoutGetBlock(layout);
+  uiBlock *block = layout->block();
   uiBut *but;
   ButsTextureUser *user;
   char name[UI_MAX_NAME_STR];
@@ -694,7 +689,7 @@ void uiTemplateTextureShow(uiLayout *layout, const bContext *C, PointerRNA *ptr,
   }
 
   /* Draw button (disabled if we cannot find a Properties Editor to display this in). */
-  uiBlock *block = uiLayoutGetBlock(layout);
+  uiBlock *block = layout->block();
   uiBut *but;
   but = uiDefIconBut(block,
                      UI_BTYPE_BUT,

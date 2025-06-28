@@ -47,7 +47,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_endian_defines.h"
-#include "BLI_endian_switch.h"
 #include "BLI_fileops.h"
 #include "BLI_ghash.h"
 #include "BLI_map.hh"
@@ -623,12 +622,11 @@ struct BlendLibReader {
 static BHeadN *get_bhead(FileData *fd)
 {
   BHeadN *new_bhead = nullptr;
-  const bool do_endian_swap = fd->flags & FD_FLAGS_SWITCH_ENDIAN;
 
   if (fd) {
     if (!fd->is_eof) {
-      std::optional<BHead> bhead_opt = BLO_readfile_read_bhead(
-          fd->file, fd->blender_header.bhead_type(), do_endian_swap);
+      std::optional<BHead> bhead_opt = BLO_readfile_read_bhead(fd->file,
+                                                               fd->blender_header.bhead_type());
       BHead *bhead = nullptr;
       if (!bhead_opt.has_value()) {
         fd->is_eof = true;
@@ -884,10 +882,9 @@ static bool read_file_dna(FileData *fd, const char **r_error_message)
       subversion = atoi(num);
     }
     else if (bhead->code == BLO_CODE_DNA1) {
-      const bool do_endian_swap = (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0;
+      BLI_assert((fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
       const bool do_alias = false; /* Postpone until after #blo_do_versions_dna runs. */
-      fd->filesdna = DNA_sdna_from_data(
-          &bhead[1], bhead->len, do_endian_swap, true, do_alias, r_error_message);
+      fd->filesdna = DNA_sdna_from_data(&bhead[1], bhead->len, true, do_alias, r_error_message);
       if (fd->filesdna) {
         blo_do_versions_dna(fd->filesdna, fd->fileversion, subversion);
         /* Allow aliased lookups (must be after version patching DNA). */
@@ -924,16 +921,11 @@ static int *read_file_thumbnail(FileData *fd)
 
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
     if (bhead->code == BLO_CODE_TEST) {
-      const bool do_endian_swap = (fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0;
+      BLI_assert((fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
       int *data = (int *)(bhead + 1);
 
       if (bhead->len < sizeof(int[2])) {
         break;
-      }
-
-      if (do_endian_swap) {
-        BLI_endian_switch_int32(&data[0]);
-        BLI_endian_switch_int32(&data[1]);
       }
 
       const int width = data[0];
@@ -1200,7 +1192,18 @@ static FileData *blo_decode_and_check(FileData *fd, ReportList *reports)
 {
   read_blender_header(fd);
 
-  if (fd->flags & FD_FLAGS_FILE_OK) {
+  if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
+    BLI_STATIC_ASSERT(ENDIAN_ORDER == L_ENDIAN, "Blender only builds on little endian systems")
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Blend file '%s' created by a Big Endian version of Blender, support for "
+                "these files has been removed in Blender 5.0, use an older version of Blender "
+                "to open and convert it.",
+                fd->relabase);
+    blo_filedata_free(fd);
+    fd = nullptr;
+  }
+  else if (fd->flags & FD_FLAGS_FILE_OK) {
     const char *error_message = nullptr;
     if (read_file_dna(fd, &error_message) == false) {
       BKE_reportf(
@@ -1211,22 +1214,6 @@ static FileData *blo_decode_and_check(FileData *fd, ReportList *reports)
     else if (is_minversion_older_than_blender(fd, reports)) {
       blo_filedata_free(fd);
       fd = nullptr;
-    }
-    else if (fd->flags & FD_FLAGS_SWITCH_ENDIAN) {
-      if (ENDIAN_ORDER == L_ENDIAN) {
-        if (!BKE_reports_print_test(reports, RPT_WARNING)) {
-          CLOG_WARN(
-              &LOG,
-              "Blend file '%s' created by a Big Endian version of Blender, support for these "
-              "files will be removed in Blender 5.0",
-              fd->relabase);
-        }
-        BKE_reportf(reports,
-                    RPT_WARNING,
-                    "Blend file '%s' created by a Big Endian version of Blender, support for "
-                    "these files will be removed in Blender 5.0",
-                    fd->relabase);
-      }
     }
   }
   else if (fd->flags & FD_FLAGS_FILE_FUTURE) {
@@ -1784,23 +1771,6 @@ void blo_cache_storage_end(FileData *fd)
 /** \name DNA Struct Loading
  * \{ */
 
-static void switch_endian_structs(const SDNA *filesdna, BHead *bhead)
-{
-  int blocksize, nblocks;
-  char *data;
-
-  data = (char *)(bhead + 1);
-
-  blocksize = DNA_struct_size(filesdna, bhead->SDNAnr);
-
-  nblocks = bhead->nr;
-  while (nblocks--) {
-    DNA_struct_switch_endian(filesdna, bhead->SDNAnr, data);
-
-    data += blocksize;
-  }
-}
-
 /**
  * Generate the final allocation string reference for read blocks of data. If \a blockname is
  * given, use it as 'owner block' info, otherwise use the id type index to get that info.
@@ -1897,6 +1867,7 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
      *
      * NOTE: raw data (aka #SDNA_RAW_DATA_STRUCT_INDEX #SDNAnr) is not handled here, it's up to
      * the calling code to manage this. */
+    BLI_assert((fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
     BLI_STATIC_ASSERT(SDNA_RAW_DATA_STRUCT_INDEX == 0, "'raw data' SDNA struct index should be 0")
     if (bh->SDNAnr > SDNA_RAW_DATA_STRUCT_INDEX && (fd->flags & FD_FLAGS_SWITCH_ENDIAN)) {
 #ifdef USE_BHEAD_READ_ON_DEMAND
@@ -1908,7 +1879,6 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
         }
       }
 #endif
-      switch_endian_structs(fd->filesdna, bh);
     }
 
     if (fd->compflags[bh->SDNAnr] != SDNA_CMP_REMOVED) {
@@ -2112,6 +2082,15 @@ static void direct_link_id_embedded_id(BlendDataReader *reader,
                                        ID *id_old)
 {
   /* Handle 'private IDs'. */
+  if (GS(id->name) == ID_SCE) {
+    Scene *scene = (Scene *)id;
+    if (scene->compositing_node_group) {
+      /* If `scene->compositing_node_group != nullptr`, then this means the blend file was created
+       * by a version that wrote the compositing_node_group as its own ID datablock. Since
+       * `scene->nodetree` was written for forward compatibility reasons only, we can ignore it. */
+      scene->nodetree = nullptr;
+    }
+  }
   bNodeTree **nodetree = blender::bke::node_tree_ptr_from_id(id);
   if (nodetree != nullptr && *nodetree != nullptr) {
     BLO_read_struct(reader, bNodeTree, nodetree);
@@ -3298,11 +3277,14 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
   /* Don't allow versioning to create new data-blocks. */
   main->is_locked_for_linking = true;
 
-  /* Code ensuring conversion from new 'system IDProperties' in 5.0. This needs to run before any
-   * other data versioning. Otherwise, things like Cycles versioning code cannot work as expected.
-   *
-   * Merge (with overwrite) future system properties storage into current IDProperties. */
-  version_forward_compat_system_idprops(main);
+  /* Code ensuring conversion to/from new 'system IDProperties'. This needs to run before any other
+   * data versioning. Otherwise, things like Cycles versioning code cannot work as expected. */
+  if (!MAIN_VERSION_FILE_ATLEAST(main, 500, 27)) {
+    /* Generate System IDProperties by copying the whole 'user-defined' historic IDProps into new
+     * system-defined-only storage. While not optimal (as it also duplicates actual user-defined
+     * IDProperties), this seems to be the only safe and sound way to handle the migration. */
+    version_system_idprops_generate(main);
+  }
 
   if (G.debug & G_DEBUG) {
     char build_commit_datetime[32];
@@ -3364,6 +3346,9 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
   if (!main->is_read_invalid) {
     blo_do_versions_450(fd, lib, main);
   }
+  if (!main->is_read_invalid) {
+    blo_do_versions_500(fd, lib, main);
+  }
 
   /* WATCH IT!!!: pointers from libdata have not been converted yet here! */
   /* WATCH IT 2!: #UserDef struct init see #do_versions_userdef() above! */
@@ -3423,6 +3408,9 @@ static void do_versions_after_linking(FileData *fd, Main *main)
   }
   if (!main->is_read_invalid) {
     do_versions_after_linking_450(fd, main);
+  }
+  if (!main->is_read_invalid) {
+    do_versions_after_linking_500(fd, main);
   }
 
   main->is_locked_for_linking = false;
@@ -4277,6 +4265,62 @@ struct BlendExpander {
   BLOExpandDoitCallback callback;
 };
 
+static void read_id_in_lib(FileData *fd,
+                           Main *libmain,
+                           Library *parent_lib,
+                           BHead *bhead,
+                           ID_Readfile_Data::Tags id_read_tags)
+{
+  ID *id = library_id_is_yet_read(fd, libmain, bhead);
+
+  if (id == nullptr) {
+    /* ID has not been read yet, add placeholder to the main of the
+     * library it belongs to, so that it will be read later. */
+    read_libblock(
+        fd, libmain, bhead, fd->id_tag_extra | ID_TAG_INDIRECT, id_read_tags, false, &id);
+    BLI_assert(id != nullptr);
+    id_sort_by_name(which_libbase(libmain, GS(id->name)), id, static_cast<ID *>(id->prev));
+
+    /* commented because this can print way too much */
+    // if (G.debug & G_DEBUG) printf("expand_doit: other lib %s\n", lib->filepath);
+
+    /* For outliner dependency only. */
+    if (parent_lib) {
+      libmain->curlib->runtime->parent = parent_lib;
+    }
+  }
+  else {
+    /* Convert any previously read weak link to regular link to signal that we want to read this
+     * data-block.
+     *
+     * Note that this function also visits already-loaded data-blocks, and thus their
+     * `readfile_data` field might already have been freed. */
+    if (BLO_readfile_id_runtime_tags(*id).is_link_placeholder) {
+      id->flag &= ~ID_FLAG_INDIRECT_WEAK_LINK;
+    }
+
+    /* "id" is either a placeholder or real ID that is already in the
+     * main of the library (A) it belongs to. However it might have been
+     * put there by another library (C) which only updated its own
+     * fd->libmap. In that case we also need to update the fd->libmap
+     * of the current library (B) so we can find it for lookups.
+     *
+     * An example of such a setup is:
+     * (A) tree.blend: contains Tree object.
+     * (B) forest.blend: contains Forest collection linking in Tree from tree.blend.
+     * (C) shot.blend: links in both Tree from tree.blend and Forest from forest.blend.
+     */
+    oldnewmap_lib_insert(fd, bhead->old, id, bhead->code);
+
+    /* Commented because this can print way too much. */
+#if 0
+      if (G.debug & G_DEBUG) {
+        printf("expand_doit: already linked: %s lib: %s\n", id->name, lib->filepath);
+      }
+#endif
+  }
+}
+
 static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
 {
   FileData *fd = static_cast<FileData *>(fdhandle);
@@ -4312,6 +4356,7 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
     Main *libmain = blo_find_main(fd, lib->filepath, fd->relabase);
+    MEM_freeN(lib);
 
     if (libmain->curlib == nullptr) {
       const char *idname = blo_bhead_id_name(fd, bhead);
@@ -4324,77 +4369,13 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
       return;
     }
 
-    ID *id = library_id_is_yet_read(fd, libmain, bhead);
-
-    if (id == nullptr) {
-      /* ID has not been read yet, add placeholder to the main of the
-       * library it belongs to, so that it will be read later. */
-      read_libblock(fd, libmain, bhead, fd->id_tag_extra | ID_TAG_INDIRECT, {}, false, &id);
-      BLI_assert(id != nullptr);
-      id_sort_by_name(which_libbase(libmain, GS(id->name)), id, static_cast<ID *>(id->prev));
-
-      /* commented because this can print way too much */
-      // if (G.debug & G_DEBUG) printf("expand_doit: other lib %s\n", lib->filepath);
-
-      /* for outliner dependency only */
-      libmain->curlib->runtime->parent = mainvar->curlib;
-    }
-    else {
-      /* Convert any previously read weak link to regular link
-       * to signal that we want to read this data-block. */
-      if (BLO_readfile_id_runtime_tags(*id).is_link_placeholder) {
-        id->flag &= ~ID_FLAG_INDIRECT_WEAK_LINK;
-      }
-
-      /* "id" is either a placeholder or real ID that is already in the
-       * main of the library (A) it belongs to. However it might have been
-       * put there by another library (C) which only updated its own
-       * fd->libmap. In that case we also need to update the fd->libmap
-       * of the current library (B) so we can find it for lookups.
-       *
-       * An example of such a setup is:
-       * (A) tree.blend: contains Tree object.
-       * (B) forest.blend: contains Forest collection linking in Tree from tree.blend.
-       * (C) shot.blend: links in both Tree from tree.blend and Forest from forest.blend.
-       */
-      oldnewmap_lib_insert(fd, bhead->old, id, bhead->code);
-
-      /* Commented because this can print way too much. */
-#if 0
-      if (G.debug & G_DEBUG) {
-        printf("expand_doit: already linked: %s lib: %s\n", id->name, lib->filepath);
-      }
-#endif
-    }
-
-    MEM_freeN(lib);
+    read_id_in_lib(fd, libmain, mainvar->curlib, bhead, {});
   }
   else {
     /* Data-block in same library. */
-    ID *id = library_id_is_yet_read(fd, mainvar, bhead);
-    if (id == nullptr) {
-      ID_Readfile_Data::Tags id_read_tags{};
-      id_read_tags.needs_expanding = true;
-      read_libblock(
-          fd, mainvar, bhead, fd->id_tag_extra | ID_TAG_INDIRECT, id_read_tags, false, &id);
-      BLI_assert(id != nullptr);
-      id_sort_by_name(which_libbase(mainvar, GS(id->name)), id, static_cast<ID *>(id->prev));
-    }
-    else {
-      /* Convert any previously read weak link to regular link to signal that we want to read this
-       * data-block. Note that this function also visits already-loaded data-blocks, and thus their
-       * `readfile_data` field might already have been freed. */
-      if (BLO_readfile_id_runtime_tags(*id).is_link_placeholder) {
-        id->flag &= ~ID_FLAG_INDIRECT_WEAK_LINK;
-      }
-
-      /* this is actually only needed on UI call? when ID was already read before,
-       * and another append happens which invokes same ID...
-       * in that case the lookup table needs this entry */
-      oldnewmap_lib_insert(fd, bhead->old, id, bhead->code);
-      /* commented because this can print way too much */
-      // if (G.debug & G_DEBUG) printf("expand: already read %s\n", id->name);
-    }
+    ID_Readfile_Data::Tags id_read_tags{};
+    id_read_tags.needs_expanding = true;
+    read_id_in_lib(fd, mainvar, nullptr, bhead, id_read_tags);
   }
 }
 
@@ -4749,6 +4730,8 @@ static void library_link_end(Main *mainl, FileData **fd, const int flag, ReportL
   /* FIXME This is extremely bad design, #library_link_end should probably _always_ free the file
    * data? */
   if ((*fd)->flags & FD_FLAGS_SWITCH_ENDIAN) {
+    /* Big Endian blend-files are not supported for linking. */
+    BLI_assert_unreachable();
     blo_filedata_free(*fd);
     *fd = nullptr;
   }
@@ -5214,11 +5197,6 @@ int BLO_read_fileversion_get(BlendDataReader *reader)
   return reader->fd->fileversion;
 }
 
-bool BLO_read_requires_endian_switch(BlendDataReader *reader)
-{
-  return (reader->fd->flags & FD_FLAGS_SWITCH_ENDIAN) != 0;
-}
-
 void BLO_read_struct_list_with_size(BlendDataReader *reader,
                                     const size_t expected_elem_size,
                                     ListBase *list)
@@ -5262,40 +5240,28 @@ void BLO_read_int16_array(BlendDataReader *reader, const int64_t array_size, int
 {
   *ptr_p = reinterpret_cast<int16_t *>(
       BLO_read_struct_array_with_size(reader, *((void **)ptr_p), sizeof(int16_t) * array_size));
-
-  if (*ptr_p && BLO_read_requires_endian_switch(reader)) {
-    BLI_endian_switch_int16_array(*ptr_p, array_size);
-  }
+  BLI_assert((reader->fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
 }
 
 void BLO_read_int32_array(BlendDataReader *reader, const int64_t array_size, int32_t **ptr_p)
 {
   *ptr_p = reinterpret_cast<int32_t *>(
       BLO_read_struct_array_with_size(reader, *((void **)ptr_p), sizeof(int32_t) * array_size));
-
-  if (*ptr_p && BLO_read_requires_endian_switch(reader)) {
-    BLI_endian_switch_int32_array(*ptr_p, array_size);
-  }
+  BLI_assert((reader->fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
 }
 
 void BLO_read_uint32_array(BlendDataReader *reader, const int64_t array_size, uint32_t **ptr_p)
 {
   *ptr_p = reinterpret_cast<uint32_t *>(
       BLO_read_struct_array_with_size(reader, *((void **)ptr_p), sizeof(uint32_t) * array_size));
-
-  if (*ptr_p && BLO_read_requires_endian_switch(reader)) {
-    BLI_endian_switch_uint32_array(*ptr_p, array_size);
-  }
+  BLI_assert((reader->fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
 }
 
 void BLO_read_float_array(BlendDataReader *reader, const int64_t array_size, float **ptr_p)
 {
   *ptr_p = reinterpret_cast<float *>(
       BLO_read_struct_array_with_size(reader, *((void **)ptr_p), sizeof(float) * array_size));
-
-  if (*ptr_p && BLO_read_requires_endian_switch(reader)) {
-    BLI_endian_switch_float_array(*ptr_p, array_size);
-  }
+  BLI_assert((reader->fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
 }
 
 void BLO_read_float3_array(BlendDataReader *reader, const int64_t array_size, float **ptr_p)
@@ -5307,10 +5273,7 @@ void BLO_read_double_array(BlendDataReader *reader, const int64_t array_size, do
 {
   *ptr_p = reinterpret_cast<double *>(
       BLO_read_struct_array_with_size(reader, *((void **)ptr_p), sizeof(double) * array_size));
-
-  if (*ptr_p && BLO_read_requires_endian_switch(reader)) {
-    BLI_endian_switch_double_array(*ptr_p, array_size);
-  }
+  BLI_assert((reader->fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
 }
 
 void BLO_read_string(BlendDataReader *reader, char **ptr_p)
@@ -5347,9 +5310,10 @@ static void convert_pointer_array_64_to_32(BlendDataReader *reader,
                                            const uint64_t *src,
                                            uint32_t *dst)
 {
-  const bool use_endian_swap = BLO_read_requires_endian_switch(reader);
+  BLI_assert((reader->fd->flags & FD_FLAGS_SWITCH_ENDIAN) == 0);
+  UNUSED_VARS_NDEBUG(reader);
   for (int i = 0; i < array_size; i++) {
-    dst[i] = uint32_from_uint64_ptr(src[i], use_endian_swap);
+    dst[i] = uint32_from_uint64_ptr(src[i]);
   }
 }
 

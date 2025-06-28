@@ -25,7 +25,7 @@
 #include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "MOD_grease_pencil_util.hh"
@@ -748,7 +748,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   const GreasePencilBuildMode mode = GreasePencilBuildMode(RNA_enum_get(ptr, "mode"));
   GreasePencilBuildTimeMode time_mode = GreasePencilBuildTimeMode(RNA_enum_get(ptr, "time_mode"));
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   /* First: Build mode and build settings. */
   layout->prop(ptr, "mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -800,7 +800,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   if (uiLayout *panel = restrict_frame_range_layout.body) {
     const bool active = RNA_boolean_get(ptr, "use_restrict_frame_range");
     uiLayout *col = &panel->column(false);
-    uiLayoutSetActive(col, active);
+    col->active_set(active);
     col->prop(ptr, "frame_start", UI_ITEM_NONE, IFACE_("Start"), ICON_NONE);
     col->prop(ptr, "frame_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
   }
@@ -809,7 +809,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   if (uiLayout *panel = fading_layout.body) {
     const bool active = RNA_boolean_get(ptr, "use_fading");
     uiLayout *col = &panel->column(false);
-    uiLayoutSetActive(col, active);
+    col->active_set(active);
 
     col->prop(ptr, "fade_factor", UI_ITEM_NONE, IFACE_("Factor"), ICON_NONE);
 
@@ -817,13 +817,8 @@ static void panel_draw(const bContext *C, Panel *panel)
     subcol->prop(ptr, "fade_thickness_strength", UI_ITEM_NONE, IFACE_("Thickness"), ICON_NONE);
     subcol->prop(ptr, "fade_opacity_strength", UI_ITEM_NONE, IFACE_("Opacity"), ICON_NONE);
 
-    uiItemPointerR(col,
-                   ptr,
-                   "target_vertex_group",
-                   &ob_ptr,
-                   "vertex_groups",
-                   IFACE_("Weight Output"),
-                   ICON_NONE);
+    col->prop_search(
+        ptr, "target_vertex_group", &ob_ptr, "vertex_groups", IFACE_("Weight Output"), ICON_NONE);
   }
 
   if (uiLayout *influence_panel = layout->panel_prop(

@@ -163,8 +163,8 @@ blender::gpu::Batch *LookdevModule::sphere_get(const SphereLOD level_of_detail)
   }
 
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
+  GPU_vertformat_attr_add(&format, "nor", gpu::VertAttrType::SFLOAT_32_32_32);
   struct Vert {
     float x, y, z;
     float nor_x, nor_y, nor_z;
@@ -293,7 +293,7 @@ void LookdevModule::sync()
   model_m4.location() = this->sphere_position_;
   model_m4 = math::scale(model_m4, float3(this->sphere_radius_));
 
-  ResourceHandle handle = inst_.manager->resource_handle(model_m4);
+  ResourceHandleRange handle = inst_.manager->resource_handle(model_m4);
   gpu::Batch *geom = sphere_get(calc_level_of_detail(viewport_scale));
 
   sync_pass(spheres_[0].pass, geom, inst_.materials.metallic_mat, handle);
@@ -304,7 +304,7 @@ void LookdevModule::sync()
 void LookdevModule::sync_pass(PassSimple &pass,
                               gpu::Batch *geom,
                               ::Material *mat,
-                              ResourceHandle res_handle)
+                              ResourceHandleRange res_handle)
 {
   pass.init();
   pass.clear_color_depth_stencil(float4(0.0, 0.0, 0.0, 1.0), inst_.film.depth.clear_value, 0);

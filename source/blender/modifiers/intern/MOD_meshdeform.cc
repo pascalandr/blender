@@ -26,7 +26,7 @@
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "BLO_read_write.hh"
@@ -512,16 +512,16 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   bool is_bound = RNA_boolean_get(ptr, "is_bound");
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(true);
-  uiLayoutSetEnabled(col, !is_bound);
+  col->enabled_set(!is_bound);
   col->prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
   col = &layout->column(false);
-  uiLayoutSetEnabled(col, !is_bound);
+  col->enabled_set(!is_bound);
   col->prop(ptr, "precision", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col->prop(ptr, "use_dynamic_bind", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 

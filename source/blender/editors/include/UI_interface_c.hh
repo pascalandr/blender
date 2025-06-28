@@ -21,7 +21,6 @@
 #include "DNA_userdef_types.h"
 
 #include "UI_interface_icons.hh"
-#include "UI_interface_layout.hh"
 #include "UI_interface_types.hh"
 
 #include "WM_types.hh"
@@ -312,6 +311,9 @@ enum {
 #define UI_TOOLBAR_WIDTH UI_TOOLBAR_MARGIN + UI_TOOLBAR_COLUMN
 
 #define UI_PANEL_CATEGORY_MARGIN_WIDTH (U.widget_unit * 1.0f)
+
+/* Minimum width for a panel showing only category tabs. */
+#define UI_PANEL_CATEGORY_MIN_WIDTH 26.0f
 
 /* Both these margins should be ignored if the panel doesn't show a background (check
  * #UI_panel_should_show_background()). */
@@ -952,10 +954,10 @@ void UI_block_lock_clear(uiBlock *block);
 enum class uiButtonSectionsAlign : int8_t { None = 1, Top, Bottom };
 /**
  * Draw a background with rounded corners behind each visual group of buttons. The visual groups
- * are separated by spacer buttons (#uiItemSpacer()). Button groups that are closer than
- * #UI_BUTTON_SECTION_MERGE_DISTANCE will be merged into one visual section. If the group is closer
- * than that to a region edge, it will also be extended to that, and the rounded corners will be
- * removed on that edge.
+ * are separated by spacer buttons (#uiLayout::separator_spacer()). Button groups that are closer
+ * than #UI_BUTTON_SECTION_MERGE_DISTANCE will be merged into one visual section. If the group is
+ * closer than that to a region edge, it will also be extended to that, and the rounded corners
+ * will be removed on that edge.
  *
  * \note This currently only works well for horizontal, header like regions.
  */
@@ -2614,27 +2616,6 @@ void uiTemplateColormanagedViewSettings(uiLayout *layout,
 int uiTemplateRecentFiles(uiLayout *layout, int rows);
 void uiTemplateFileSelectPath(uiLayout *layout, bContext *C, FileSelectParams *params);
 
-enum {
-  UI_TEMPLATE_ASSET_DRAW_NO_NAMES = (1 << 0),
-  UI_TEMPLATE_ASSET_DRAW_NO_FILTER = (1 << 1),
-  UI_TEMPLATE_ASSET_DRAW_NO_LIBRARY = (1 << 2),
-};
-void uiTemplateAssetView(uiLayout *layout,
-                         const bContext *C,
-                         const char *list_id,
-                         PointerRNA *asset_library_dataptr,
-                         const char *asset_library_propname,
-                         PointerRNA *assets_dataptr,
-                         const char *assets_propname,
-                         PointerRNA *active_dataptr,
-                         const char *active_propname,
-                         const blender::ed::asset::AssetFilterSettings *filter_settings,
-                         int display_flags,
-                         const char *activate_opname,
-                         PointerRNA *r_activate_op_properties,
-                         const char *drag_opname,
-                         PointerRNA *r_drag_op_properties);
-
 namespace blender::ui {
 
 void template_asset_shelf_popover(
@@ -2659,24 +2640,14 @@ void uiTemplateNodeInputs(uiLayout *layout, bContext *C, PointerRNA *ptr);
 
 void uiTemplateCollectionExporters(uiLayout *layout, bContext *C);
 
+namespace blender::ed::object::shapekey {
+void template_tree(uiLayout *layout, bContext *C);
+}
 /**
  * \return: True if the list item with unfiltered, unordered index \a item_idx is visible given the
  *          current filter settings.
  */
 bool UI_list_item_index_is_filtered_visible(const struct uiList *ui_list, int item_idx);
-
-/**
- * \return An RNA pointer for the operator properties.
- */
-PointerRNA *UI_list_custom_activate_operator_set(uiList *ui_list,
-                                                 blender::StringRefNull opname,
-                                                 bool create_properties);
-/**
- * \return An RNA pointer for the operator properties.
- */
-PointerRNA *UI_list_custom_drag_operator_set(uiList *ui_list,
-                                             blender::StringRefNull opname,
-                                             bool create_properties);
 
 /* UI Operators */
 struct uiDragColorHandle {
@@ -2919,18 +2890,6 @@ void UI_butstore_register(uiButStore *bs_handle, uiBut **but_p);
  */
 bool UI_butstore_register_update(uiBlock *block, uiBut *but_dst, const uiBut *but_src);
 void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p);
-
-/**
- * A version of #WM_key_event_operator_string that's limited to UI elements.
- *
- * This supports showing shortcuts in context-menus (for example),
- * for actions that can also be activated using shortcuts while the cursor is over the button.
- * Without this those shortcuts aren't discoverable for users.
- */
-std::optional<std::string> UI_key_event_operator_string(const bContext *C,
-                                                        blender::StringRefNull opname,
-                                                        IDProperty *properties,
-                                                        bool is_strict);
 
 /* ui_interface_region_tooltip.c */
 

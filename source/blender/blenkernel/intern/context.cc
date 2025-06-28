@@ -292,18 +292,18 @@ static void *ctx_wm_python_context_get(const bContext *C,
 #ifdef WITH_PYTHON
   if (UNLIKELY(C && CTX_py_dict_get(C))) {
     bContextDataResult result{};
-    BPY_context_member_get((bContext *)C, member, &result);
+    if (BPY_context_member_get((bContext *)C, member, &result)) {
+      if (result.ptr.data) {
+        if (RNA_struct_is_a(result.ptr.type, member_type)) {
+          return result.ptr.data;
+        }
 
-    if (result.ptr.data) {
-      if (RNA_struct_is_a(result.ptr.type, member_type)) {
-        return result.ptr.data;
+        CLOG_WARN(&LOG,
+                  "PyContext '%s' is a '%s', expected a '%s'",
+                  member,
+                  RNA_struct_identifier(result.ptr.type),
+                  RNA_struct_identifier(member_type));
       }
-
-      CLOG_WARN(&LOG,
-                "PyContext '%s' is a '%s', expected a '%s'",
-                member,
-                RNA_struct_identifier(result.ptr.type),
-                RNA_struct_identifier(member_type));
     }
   }
 #else
@@ -1529,47 +1529,10 @@ const AssetLibraryReference *CTX_wm_asset_library_ref(const bContext *C)
   return static_cast<AssetLibraryReference *>(ctx_data_pointer_get(C, "asset_library_reference"));
 }
 
-static AssetHandle ctx_wm_asset_handle(const bContext *C, bool *r_is_valid)
-{
-  AssetHandle *asset_handle_p =
-      (AssetHandle *)CTX_data_pointer_get_type(C, "asset_handle", &RNA_AssetHandle).data;
-  if (asset_handle_p) {
-    *r_is_valid = true;
-    return *asset_handle_p;
-  }
-
-  /* If the asset handle was not found in context directly, try if there's an active file with
-   * asset data there instead. Not nice to have this here, would be better to have this in
-   * `ED_asset.hh`, but we can't include that in BKE. Even better would be not needing this at all
-   * and being able to have editors return this in the usual `context` callback. But that would
-   * require returning a non-owning pointer, which we don't have in the Asset Browser (yet). */
-  FileDirEntry *file =
-      (FileDirEntry *)CTX_data_pointer_get_type(C, "active_file", &RNA_FileSelectEntry).data;
-  if (file && file->asset) {
-    *r_is_valid = true;
-    return AssetHandle{file};
-  }
-
-  *r_is_valid = false;
-  return AssetHandle{nullptr};
-}
-
 blender::asset_system::AssetRepresentation *CTX_wm_asset(const bContext *C)
 {
-  if (auto *asset = static_cast<blender::asset_system::AssetRepresentation *>(
-          ctx_data_pointer_get(C, "asset")))
-  {
-    return asset;
-  }
-
-  /* Expose the asset representation from the asset-handle.
-   * TODO(Julian): #AssetHandle should be properly replaced by #AssetRepresentation. */
-  bool is_valid;
-  if (AssetHandle handle = ctx_wm_asset_handle(C, &is_valid); is_valid) {
-    return handle.file_data->asset;
-  }
-
-  return nullptr;
+  return static_cast<blender::asset_system::AssetRepresentation *>(
+      ctx_data_pointer_get(C, "asset"));
 }
 
 Depsgraph *CTX_data_depsgraph_pointer(const bContext *C)

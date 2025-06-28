@@ -302,6 +302,9 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
       case VBOType::VertexNormal:
         created_vbos[i] = extract_vert_normals(mr);
         break;
+      case VBOType::PaintOverlayFlag:
+        created_vbos[i] = extract_paint_overlay_flags(mr);
+        break;
     }
   });
 
@@ -355,7 +358,10 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
 
   if (vbos_to_create.contains(VBOType::Position) || vbos_to_create.contains(VBOType::Orco)) {
     gpu::VertBufPtr orco_vbo;
-    buffers.vbos.add_new(
+    /* Don't use `add_new` because #VBOType::Orco might be requested after #VBOType::Position
+     * already exists. It's inefficient to build the position VBO a second time but that's the API
+     * that GPU subdivision provides. */
+    buffers.vbos.add(
         VBOType::Position,
         extract_positions_subdiv(
             subdiv_cache, mr, vbos_to_create.contains(VBOType::Orco) ? &orco_vbo : nullptr));
@@ -428,11 +434,19 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
         face_dot_position_vbo,
         vbos_to_create.contains(VBOType::FaceDotNormal) ? &face_dot_normal_vbo : nullptr,
         face_dot_ibo);
-    buffers.vbos.add_new(VBOType::FaceDotPosition, std::move(face_dot_position_vbo));
+    if (vbos_to_create.contains(VBOType::FaceDotPosition)) {
+      buffers.vbos.add_new(VBOType::FaceDotPosition, std::move(face_dot_position_vbo));
+    }
     if (face_dot_normal_vbo) {
       buffers.vbos.add_new(VBOType::FaceDotNormal, std::move(face_dot_normal_vbo));
     }
-    buffers.ibos.add_new(IBOType::FaceDots, std::move(face_dot_ibo));
+    if (ibos_to_create.contains(IBOType::FaceDots)) {
+      buffers.ibos.add_new(IBOType::FaceDots, std::move(face_dot_ibo));
+    }
+  }
+  if (vbos_to_create.contains(VBOType::PaintOverlayFlag)) {
+    buffers.vbos.add_new(VBOType::PaintOverlayFlag,
+                         extract_paint_overlay_flags_subdiv(mr, subdiv_cache));
   }
   if (ibos_to_create.contains(IBOType::LinesPaintMask)) {
     buffers.ibos.add_new(IBOType::LinesPaintMask,

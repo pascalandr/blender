@@ -32,6 +32,13 @@
 
 #include "draw_common.hh"
 
+template<> struct blender::gpu::AttrType<VertexClass> {
+  static constexpr VertAttrType type = VertAttrType::SINT_32;
+};
+template<> struct blender::gpu::AttrType<StickBoneFlag> {
+  static constexpr VertAttrType type = VertAttrType::SINT_32;
+};
+
 namespace blender::draw::overlay {
 
 struct BoneInstanceData {
@@ -275,22 +282,30 @@ struct State {
 struct Vertex {
   float3 pos;
   VertexClass vclass;
+
+  GPU_VERTEX_FORMAT_FUNC(Vertex, pos, vclass);
 };
 
 struct VertexBone {
   float3 pos;
   StickBoneFlag vclass;
+
+  GPU_VERTEX_FORMAT_FUNC(VertexBone, pos, vclass);
 };
 
 struct VertexWithColor {
   float3 pos;
   float3 color;
+
+  GPU_VERTEX_FORMAT_FUNC(VertexWithColor, pos, color);
 };
 
 struct VertShaded {
   float3 pos;
-  VertexClass v_class;
+  VertexClass vclass;
   float3 nor;
+
+  GPU_VERTEX_FORMAT_FUNC(VertShaded, pos, vclass, nor);
 };
 
 /* TODO(fclem): Might be good to remove for simplicity. */
@@ -298,6 +313,8 @@ struct VertexTriple {
   float2 pos0;
   float2 pos1;
   float2 pos2;
+
+  GPU_VERTEX_FORMAT_FUNC(VertexTriple, pos0, pos1, pos2);
 };
 
 /**
@@ -389,72 +406,10 @@ class ShapeCache {
   ShapeCache();
 
  private:
-  GPUVertFormat format_vert = {0};
-  GPUVertFormat format_vert_with_color = {0};
-  GPUVertFormat format_vert_shaded = {0};
-  GPUVertFormat format_vert_triple = {0};
-
-  const GPUVertFormat &get_format(Vertex /*unused*/)
-  {
-    GPUVertFormat &format = format_vert;
-    if (format.attr_len != 0) {
-      return format;
-    }
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "vclass", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    return format;
-  }
-
-  const GPUVertFormat &get_format(VertexBone /*unused*/)
-  {
-    GPUVertFormat &format = format_vert;
-    if (format.attr_len != 0) {
-      return format;
-    }
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "vclass", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    return format;
-  }
-
-  const GPUVertFormat &get_format(VertexWithColor /*unused*/)
-  {
-    GPUVertFormat &format = format_vert_with_color;
-    if (format.attr_len != 0) {
-      return format;
-    }
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "color", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    return format;
-  }
-
-  const GPUVertFormat &get_format(VertShaded /*unused*/)
-  {
-    GPUVertFormat &format = format_vert_shaded;
-    if (format.attr_len != 0) {
-      return format;
-    }
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "vclass", GPU_COMP_I32, 1, GPU_FETCH_INT);
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    return format;
-  }
-
-  const GPUVertFormat &get_format(VertexTriple /*unused*/)
-  {
-    GPUVertFormat &format = format_vert_triple;
-    if (format.attr_len != 0) {
-      return format;
-    }
-    GPU_vertformat_attr_add(&format, "pos0", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "pos1", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "pos2", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    return format;
-  }
-
   /* Caller gets ownership of the #gpu::VertBuf. */
   template<typename T> gpu::VertBuf *vbo_from_vector(const Vector<T> &vector)
   {
-    gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(get_format(T()));
+    gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(T::format());
     GPU_vertbuf_data_alloc(*vbo, vector.size());
     vbo->data<T>().copy_from(vector);
     return vbo;
@@ -623,7 +578,7 @@ struct GreasePencilDepthPlane {
   /* Center and size of the bounding box of the Grease Pencil object. */
   Bounds<float3> bounds;
   /* Grease-pencil object resource handle. */
-  ResourceHandle handle;
+  ResourceHandleRange handle;
 };
 
 struct Resources : public select::SelectMap {
@@ -820,16 +775,16 @@ struct Resources : public select::SelectMap {
 
     if (state.xray_enabled) {
       /* For X-ray we render the scene to a separate depth buffer. */
-      this->xray_depth_tx.acquire(render_size, GPU_DEPTH24_STENCIL8);
+      this->xray_depth_tx.acquire(render_size, GPU_DEPTH32F_STENCIL8);
       this->depth_target_tx.wrap(this->xray_depth_tx);
       /* TODO(fclem): Remove mandatory allocation. */
-      this->xray_depth_in_front_tx.acquire(render_size, GPU_DEPTH24_STENCIL8);
+      this->xray_depth_in_front_tx.acquire(render_size, GPU_DEPTH32F_STENCIL8);
       this->depth_target_in_front_tx.wrap(this->xray_depth_in_front_tx);
     }
     else {
       /* TODO(fclem): Remove mandatory allocation. */
       if (!this->depth_in_front_tx.is_valid()) {
-        this->depth_in_front_alloc_tx.acquire(render_size, GPU_DEPTH24_STENCIL8);
+        this->depth_in_front_alloc_tx.acquire(render_size, GPU_DEPTH32F_STENCIL8);
         this->depth_in_front_tx.wrap(this->depth_in_front_alloc_tx);
       }
       this->depth_target_tx.wrap(this->depth_tx);
@@ -899,9 +854,7 @@ struct Resources : public select::SelectMap {
   {
     const bool is_edit = (state.object_mode & OB_MODE_EDIT) &&
                          (ob_ref.object->mode & OB_MODE_EDIT);
-    const bool active = ((ob_ref.dupli_parent != nullptr) ?
-                             (state.object_active == ob_ref.dupli_parent) :
-                             (state.object_active == ob_ref.object));
+    const bool active = ob_ref.is_active(state.object_active);
     const bool is_selected = ((ob_ref.object->base_flag & BASE_SELECTED) != 0);
 
     /* Object in edit mode. */
@@ -1026,7 +979,7 @@ struct Resources : public select::SelectMap {
  * Allow deferred rendering condition of flat object for special purpose. */
 struct FlatObjectRef {
   gpu::Batch *geom;
-  ResourceHandle handle;
+  ResourceHandleRange handle;
   int flattened_axis_id;
 
   /* Returns flat axis index if only one axis is flat. Returns -1 otherwise. */
@@ -1055,7 +1008,7 @@ struct FlatObjectRef {
     return -1;
   }
 
-  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceHandle handle)>;
+  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceHandleRange handle)>;
 
   /* Execute callback for every handles that is orthogonal to the view.
    * Note: Only works in orthogonal view. */
@@ -1122,7 +1075,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
     data_buf.push_update();
     pass.bind_ssbo("data_buf", &data_buf);
     pass.draw_expand(
-        shape, primitive_type, primitive_len, data_buf.size(), ResourceHandle(0), uint(0));
+        shape, primitive_type, primitive_len, data_buf.size(), ResourceHandleRange(0), uint(0));
   }
 };
 

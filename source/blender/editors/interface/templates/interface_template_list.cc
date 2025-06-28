@@ -30,7 +30,7 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_view2d.hh"
 
 #include "WM_api.hh"
@@ -340,15 +340,6 @@ static void uilist_free_dyn_data(uiList *ui_list)
   uiListDyn *dyn_data = ui_list->dyn_data;
   if (!dyn_data) {
     return;
-  }
-
-  if (dyn_data->custom_activate_opptr) {
-    WM_operator_properties_free(dyn_data->custom_activate_opptr);
-    MEM_delete(dyn_data->custom_activate_opptr);
-  }
-  if (dyn_data->custom_drag_opptr) {
-    WM_operator_properties_free(dyn_data->custom_drag_opptr);
-    MEM_delete(dyn_data->custom_drag_opptr);
   }
 
   MEM_SAFE_FREE(dyn_data->items_filter_flags);
@@ -715,7 +706,7 @@ static void ui_template_list_layout_draw(const bContext *C,
   int rnaicon = ICON_NONE, icon = ICON_NONE;
   uiBut *but;
 
-  uiBlock *block = uiLayoutGetBlock(layout);
+  uiBlock *block = layout->block();
 
   /* get icon */
   if (input_data->dataptr.data && input_data->prop) {
@@ -748,7 +739,7 @@ static void ui_template_list_layout_draw(const bContext *C,
           void *dyntip_data;
           const int org_i = items->item_vec[i].org_idx;
           const int flt_flag = items->item_vec[i].flt_flag;
-          uiBlock *subblock = uiLayoutGetBlock(col);
+          uiBlock *subblock = col->block();
 
           overlap = &col->overlap();
 
@@ -802,7 +793,7 @@ static void ui_template_list_layout_draw(const bContext *C,
 
           /* Items should be able to set context pointers for the layout. But the list-row button
            * swallows events, so it needs the context storage too for handlers to see it. */
-          but->context = uiLayoutGetContextStore(sub);
+          but->context = sub->context_store();
 
           /* If we are "drawing" active item, set all labels as active. */
           if (i == items->active_item_idx) {
@@ -911,7 +902,7 @@ static void ui_template_list_layout_draw(const bContext *C,
             subrow = &col->row(false);
           }
 
-          uiBlock *subblock = uiLayoutGetBlock(subrow);
+          uiBlock *subblock = subrow->block();
           overlap = &subrow->overlap();
 
           UI_block_flag_enable(subblock, UI_BLOCK_LIST_ITEM);
@@ -998,8 +989,7 @@ static void ui_template_list_layout_draw(const bContext *C,
       const int size_x = UI_preview_tile_size_x();
       const int size_y = show_names ? UI_preview_tile_size_y() : UI_preview_tile_size_y_no_label();
 
-      const int cols_per_row = std::max(int((uiLayoutGetWidth(box) - V2D_SCROLL_WIDTH) / size_x),
-                                        1);
+      const int cols_per_row = std::max(int((box->width() - V2D_SCROLL_WIDTH) / size_x), 1);
       uiLayout *grid = &row->grid_flow(true, cols_per_row, true, true, true);
 
       TemplateListLayoutDrawData adjusted_layout_data = *layout_data;
@@ -1016,7 +1006,7 @@ static void ui_template_list_layout_draw(const bContext *C,
           overlap = &grid->overlap();
           col = &overlap->column(false);
 
-          uiBlock *subblock = uiLayoutGetBlock(col);
+          uiBlock *subblock = col->block();
           UI_block_flag_enable(subblock, UI_BLOCK_LIST_ITEM);
 
           but = uiDefButR_prop(subblock,
@@ -1051,7 +1041,7 @@ static void ui_template_list_layout_draw(const bContext *C,
 
           /* Items should be able to set context pointers for the layout. But the list-row button
            * swallows events, so it needs the context storage too for handlers to see it. */
-          but->context = uiLayoutGetContextStore(col);
+          but->context = col->context_store();
 
           /* If we are "drawing" active item, set all labels as active. */
           if (i == items->active_item_idx) {
@@ -1103,7 +1093,7 @@ static void ui_template_list_layout_draw(const bContext *C,
                        (dyn_data->visual_height - ui_list->list_grip) * UI_UNIT_Y;
 
     row = &glob->row(true);
-    uiBlock *subblock = uiLayoutGetBlock(row);
+    uiBlock *subblock = row->block();
     UI_block_emboss_set(subblock, blender::ui::EmbossType::None);
 
     if (ui_list->filter_flag & UILST_FLT_SHOW) {
@@ -1141,7 +1131,7 @@ static void ui_template_list_layout_draw(const bContext *C,
       UI_block_emboss_set(subblock, blender::ui::EmbossType::Emboss);
 
       col = &glob->column(false);
-      subblock = uiLayoutGetBlock(col);
+      subblock = col->block();
       uiDefBut(subblock,
                UI_BTYPE_SEPR,
                0,
@@ -1296,46 +1286,6 @@ void uiTemplateList(uiLayout *layout,
                     nullptr);
 }
 
-PointerRNA *UI_list_custom_activate_operator_set(uiList *ui_list,
-                                                 const StringRefNull opname,
-                                                 bool create_properties)
-{
-  uiListDyn *dyn_data = ui_list->dyn_data;
-  dyn_data->custom_activate_optype = WM_operatortype_find(opname.c_str(), false);
-  if (!dyn_data->custom_activate_optype) {
-    return nullptr;
-  }
-
-  if (create_properties) {
-    PointerRNA *opptr = dyn_data->custom_activate_opptr;
-    WM_operator_properties_alloc(&dyn_data->custom_activate_opptr,
-                                 opptr ? (IDProperty **)&opptr->data : nullptr,
-                                 opname.c_str());
-  }
-
-  return dyn_data->custom_activate_opptr;
-}
-
-PointerRNA *UI_list_custom_drag_operator_set(uiList *ui_list,
-                                             const StringRefNull opname,
-                                             bool create_properties)
-{
-  uiListDyn *dyn_data = ui_list->dyn_data;
-  dyn_data->custom_drag_optype = WM_operatortype_find(opname.c_str(), false);
-  if (!dyn_data->custom_drag_optype) {
-    return nullptr;
-  }
-
-  if (create_properties) {
-    PointerRNA *opptr = dyn_data->custom_drag_opptr;
-    WM_operator_properties_alloc(&dyn_data->custom_drag_opptr,
-                                 opptr ? (IDProperty **)&opptr->data : nullptr,
-                                 opname.c_str());
-  }
-
-  return dyn_data->custom_drag_opptr;
-}
-
 /* -------------------------------------------------------------------- */
 
 /** \name List-types Registration
@@ -1343,7 +1293,6 @@ PointerRNA *UI_list_custom_drag_operator_set(uiList *ui_list,
 
 void ED_uilisttypes_ui()
 {
-  WM_uilisttype_add(UI_UL_asset_view());
   WM_uilisttype_add(UI_UL_cache_file_layers());
 }
 

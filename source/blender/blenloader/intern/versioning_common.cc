@@ -12,6 +12,7 @@
 
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_sequence_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_map.hh"
@@ -257,6 +258,15 @@ bNode &version_node_add_empty(bNodeTree &ntree, const char *idname)
   return *node;
 }
 
+void version_node_remove(bNodeTree &ntree, bNode &node)
+{
+  blender::bke::node_unlink_node(ntree, node);
+  blender::bke::node_unlink_attached(&ntree, &node);
+
+  blender::bke::node_free_node(&ntree, node);
+  blender::bke::node_rebuild_id_vector(ntree);
+}
+
 bNodeSocket &version_node_add_socket(bNodeTree &ntree,
                                      bNode &node,
                                      const eNodeSocketInOut in_out,
@@ -496,13 +506,13 @@ float *version_cycles_node_socket_vector_value(bNodeSocket *socket)
 
 IDProperty *version_cycles_properties_from_ID(ID *id)
 {
-  IDProperty *idprop = IDP_GetProperties(id);
+  IDProperty *idprop = IDP_ID_system_properties_get(id);
   return (idprop) ? IDP_GetPropertyTypeFromGroup(idprop, "cycles", IDP_GROUP) : nullptr;
 }
 
 IDProperty *version_cycles_properties_from_view_layer(ViewLayer *view_layer)
 {
-  IDProperty *idprop = view_layer->id_properties;
+  IDProperty *idprop = view_layer->system_properties;
   return (idprop) ? IDP_GetPropertyTypeFromGroup(idprop, "cycles", IDP_GROUP) : nullptr;
 }
 
@@ -546,7 +556,7 @@ void version_cycles_property_boolean_set(IDProperty *idprop, const char *name, b
 
 IDProperty *version_cycles_visibility_properties_from_ID(ID *id)
 {
-  IDProperty *idprop = IDP_GetProperties(id);
+  IDProperty *idprop = IDP_ID_system_properties_get(id);
   return (idprop) ? IDP_GetPropertyTypeFromGroup(idprop, "cycles_visibility", IDP_GROUP) : nullptr;
 }
 
@@ -737,5 +747,25 @@ void do_versions_after_setup(Main *new_bmain,
   if (!blendfile_or_libraries_versions_atleast(new_bmain, 403, 3)) {
     /* Convert all the legacy grease pencil objects. This does not touch annotations. */
     blender::bke::greasepencil::convert::legacy_main(*new_bmain, lapp_context, *reports);
+  }
+
+  if (!blendfile_or_libraries_versions_atleast(new_bmain, 500, 4)) {
+    LISTBASE_FOREACH (Scene *, scene, &new_bmain->scenes) {
+      bNodeTree *ntree = scene->nodetree;
+      if (!ntree) {
+        continue;
+      }
+      ntree->id.flag &= ~ID_FLAG_EMBEDDED_DATA;
+      ntree->owner_id = nullptr;
+      ntree->id.tag |= ID_TAG_NO_MAIN;
+
+      scene->compositing_node_group = ntree;
+      scene->nodetree = nullptr;
+
+      BKE_libblock_management_main_add(new_bmain, ntree);
+
+      /* Note: The user count remains zero at this point. It will get automatically updated after
+       * blend file reading is done.*/
+    }
   }
 }

@@ -26,6 +26,7 @@
 #  include "BLT_translation.hh"
 
 #  include "UI_interface.hh"
+#  include "UI_interface_layout.hh"
 
 #  include "IO_fbx.hh"
 #  include "io_fbx_ops.hh"
@@ -88,15 +89,15 @@ static bool wm_fbx_import_check(bContext * /*C*/, wmOperator * /*op*/)
 
 static void ui_fbx_import_settings(const bContext *C, uiLayout *layout, PointerRNA *ptr)
 {
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   if (uiLayout *panel = layout->panel(C, "FBX_import_general", false, IFACE_("General"))) {
     uiLayout *col = &panel->column(false);
     col->prop(ptr, "global_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "use_custom_props", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     uiLayout &subcol = col->column(false);
-    uiLayoutSetActive(&subcol, RNA_boolean_get(ptr, "use_custom_props"));
+    subcol.active_set(RNA_boolean_get(ptr, "use_custom_props"));
     subcol.prop(ptr, "use_custom_props_enum_as_string", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
@@ -110,7 +111,7 @@ static void ui_fbx_import_settings(const bContext *C, uiLayout *layout, PointerR
 
   {
     PanelLayout panel = layout->panel(C, "FBX_import_anim", true);
-    uiLayoutSetPropSep(panel.header, false);
+    panel.header->use_property_split_set(false);
     panel.header->prop(ptr, "use_anim", UI_ITEM_NONE, "", ICON_NONE);
     panel.header->label(IFACE_("Animation"), ICON_NONE);
     if (panel.body) {

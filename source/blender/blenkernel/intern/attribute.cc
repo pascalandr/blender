@@ -104,6 +104,44 @@ GreasePencilDrawing *AttributeOwner::get_grease_pencil_drawing() const
   return reinterpret_cast<GreasePencilDrawing *>(ptr_);
 }
 
+blender::bke::AttributeStorage *AttributeOwner::get_storage() const
+{
+  switch (type_) {
+    case AttributeOwnerType::Mesh:
+      return &this->get_mesh()->attribute_storage.wrap();
+    case AttributeOwnerType::PointCloud:
+      return &this->get_pointcloud()->attribute_storage.wrap();
+    case AttributeOwnerType::Curves:
+      return &this->get_curves()->geometry.attribute_storage.wrap();
+    case AttributeOwnerType::GreasePencil:
+      return &this->get_grease_pencil()->attribute_storage.wrap();
+    case AttributeOwnerType::GreasePencilDrawing:
+      return &this->get_grease_pencil_drawing()->geometry.attribute_storage.wrap();
+  }
+  BLI_assert(false);
+  return nullptr;
+}
+
+std::optional<blender::bke::MutableAttributeAccessor> AttributeOwner::get_accessor() const
+{
+  switch (type_) {
+    case AttributeOwnerType::Mesh:
+      /* The attribute API isn't implemented for BMesh, so edit mode meshes are not supported. */
+      BLI_assert(this->get_mesh()->runtime->edit_mesh == nullptr);
+      return this->get_mesh()->attributes_for_write();
+    case AttributeOwnerType::PointCloud:
+      return this->get_pointcloud()->attributes_for_write();
+    case AttributeOwnerType::Curves:
+      return this->get_curves()->geometry.wrap().attributes_for_write();
+    case AttributeOwnerType::GreasePencil:
+      return this->get_grease_pencil()->attributes_for_write();
+    case AttributeOwnerType::GreasePencilDrawing:
+      return this->get_grease_pencil_drawing()->geometry.wrap().attributes_for_write();
+  }
+  BLI_assert(false);
+  return std::nullopt;
+}
+
 struct DomainInfo {
   CustomData *customdata = nullptr;
   int length = 0;
@@ -115,9 +153,8 @@ static std::array<DomainInfo, ATTR_DOMAIN_NUM> get_domains(const AttributeOwner 
 
   switch (owner.type()) {
     case AttributeOwnerType::PointCloud: {
-      PointCloud *pointcloud = owner.get_pointcloud();
-      info[int(AttrDomain::Point)].customdata = &pointcloud->pdata;
-      info[int(AttrDomain::Point)].length = pointcloud->totpoint;
+      /* This should be implemented with #AttributeStorage instead. */
+      BLI_assert_unreachable();
       break;
     }
     case AttributeOwnerType::Mesh: {
@@ -171,41 +208,6 @@ static std::array<DomainInfo, ATTR_DOMAIN_NUM> get_domains(const AttributeOwner 
 
   return info;
 }
-
-namespace blender::bke {
-
-static std::optional<blender::bke::MutableAttributeAccessor> get_attribute_accessor_for_write(
-    AttributeOwner &owner)
-{
-  switch (owner.type()) {
-    case AttributeOwnerType::Mesh: {
-      Mesh &mesh = *owner.get_mesh();
-      /* The attribute API isn't implemented for BMesh, so edit mode meshes are not supported. */
-      BLI_assert(mesh.runtime->edit_mesh == nullptr);
-      return mesh.attributes_for_write();
-    }
-    case AttributeOwnerType::PointCloud: {
-      PointCloud &pointcloud = *owner.get_pointcloud();
-      return pointcloud.attributes_for_write();
-    }
-    case AttributeOwnerType::Curves: {
-      Curves &curves_id = *owner.get_curves();
-      CurvesGeometry &curves = curves_id.geometry.wrap();
-      return curves.attributes_for_write();
-    }
-    case AttributeOwnerType::GreasePencil: {
-      GreasePencil &grease_pencil = *owner.get_grease_pencil();
-      return grease_pencil.attributes_for_write();
-    }
-    case AttributeOwnerType::GreasePencilDrawing: {
-      blender::bke::greasepencil::Drawing &drawing = owner.get_grease_pencil_drawing()->wrap();
-      return drawing.strokes_for_write().attributes_for_write();
-    }
-  }
-  return {};
-}
-
-}  // namespace blender::bke
 
 static bool bke_attribute_rename_if_exists(AttributeOwner &owner,
                                            const StringRef old_name,
@@ -277,6 +279,16 @@ bool BKE_attribute_rename(AttributeOwner &owner,
   if (new_name.is_empty()) {
     BKE_report(reports, RPT_ERROR, "Attribute name cannot be empty");
     return false;
+  }
+
+  if (owner.type() == AttributeOwnerType::PointCloud) {
+    bke::AttributeStorage &attributes = *owner.get_storage();
+    if (!attributes.lookup(old_name)) {
+      BKE_report(reports, RPT_ERROR, "Attribute is not part of this geometry");
+      return false;
+    }
+    attributes.rename(old_name, new_name);
+    return true;
   }
 
   /* NOTE: Checking if the new name matches the old name only makes sense when the name
@@ -382,6 +394,10 @@ static bool attribute_name_exists(const AttributeOwner &owner, const StringRef n
 
 std::string BKE_attribute_calc_unique_name(const AttributeOwner &owner, const StringRef name)
 {
+  if (owner.type() == AttributeOwnerType::PointCloud) {
+    blender::bke::AttributeStorage &storage = *owner.get_storage();
+    return storage.unique_name_calc(name);
+  }
   return BLI_uniquename_cb(
       [&](const StringRef new_name) { return attribute_name_exists(owner, new_name); },
       '.',
@@ -417,7 +433,7 @@ CustomDataLayer *BKE_attribute_new(AttributeOwner &owner,
     }
   }
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
+  std::optional<MutableAttributeAccessor> attributes = owner.get_accessor();
   if (!attributes) {
     return nullptr;
   }
@@ -438,7 +454,7 @@ static void bke_attribute_copy_if_exists(AttributeOwner &owner,
 {
   using namespace blender::bke;
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
+  std::optional<MutableAttributeAccessor> attributes = owner.get_accessor();
   if (!attributes) {
     return;
   }
@@ -467,7 +483,7 @@ CustomDataLayer *BKE_attribute_duplicate(AttributeOwner &owner,
     }
   }
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
+  std::optional<MutableAttributeAccessor> attributes = owner.get_accessor();
   if (!attributes) {
     return nullptr;
   }
@@ -533,9 +549,8 @@ bool BKE_attribute_remove(AttributeOwner &owner, const StringRef name, ReportLis
     return false;
   }
 
-  const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
-
   if (owner.type() == AttributeOwnerType::Mesh) {
+    const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(owner);
     Mesh *mesh = owner.get_mesh();
     if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
       for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
@@ -585,7 +600,7 @@ bool BKE_attribute_remove(AttributeOwner &owner, const StringRef name, ReportLis
     }
   }
 
-  std::optional<MutableAttributeAccessor> attributes = get_attribute_accessor_for_write(owner);
+  std::optional<MutableAttributeAccessor> attributes = owner.get_accessor();
   if (!attributes) {
     return false;
   }
@@ -801,10 +816,20 @@ bool BKE_attribute_required(const AttributeOwner &owner, const StringRef name)
 
 std::optional<blender::StringRefNull> BKE_attributes_active_name_get(AttributeOwner &owner)
 {
+  using namespace blender;
+  using namespace blender::bke;
   int active_index = *BKE_attributes_active_index_p(owner);
   if (active_index == -1) {
     return std::nullopt;
   }
+  if (owner.type() == AttributeOwnerType::PointCloud) {
+    bke::AttributeStorage &storage = *owner.get_storage();
+    if (active_index >= storage.count()) {
+      return std::nullopt;
+    }
+    return storage.at_index(active_index).name();
+  }
+
   if (active_index > BKE_attributes_length(owner, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL)) {
     active_index = 0;
   }
@@ -837,6 +862,13 @@ std::optional<blender::StringRefNull> BKE_attributes_active_name_get(AttributeOw
 
 void BKE_attributes_active_set(AttributeOwner &owner, const StringRef name)
 {
+  using namespace blender;
+  if (owner.type() == AttributeOwnerType::PointCloud) {
+    bke::AttributeStorage &attributes = *owner.get_storage();
+    *BKE_attributes_active_index_p(owner) = attributes.index_of(name);
+    return;
+  }
+
   const CustomDataLayer *layer = BKE_attribute_search(
       owner, name, CD_MASK_PROP_ALL, ATTR_DOMAIN_MASK_ALL);
   BLI_assert(layer != nullptr);

@@ -21,7 +21,7 @@
 
 #include "WM_api.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 
 #include "node_geometry_util.hh"
 
@@ -53,8 +53,8 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *current_no
         C, panel, ntree, output_node);
     socket_items::ui::draw_active_item_props<RepeatItemsAccessor>(
         ntree, output_node, [&](PointerRNA *item_ptr) {
-          uiLayoutSetPropSep(panel, true);
-          uiLayoutSetPropDecorate(panel, false);
+          panel->use_property_split_set(true);
+          panel->use_property_decorate_set(false);
           panel->prop(item_ptr, "socket_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
         });
   }
@@ -94,6 +94,8 @@ static void node_declare(NodeDeclarationBuilder &b)
           input_decl.supports_field();
           output_decl.dependent_field({input_decl.index()});
         }
+        input_decl.structure_type(StructureType::Dynamic);
+        output_decl.structure_type(StructureType::Dynamic);
       }
     }
   }
@@ -176,6 +178,8 @@ static void node_declare(NodeDeclarationBuilder &b)
         input_decl.supports_field();
         output_decl.dependent_field({input_decl.index()});
       }
+      input_decl.structure_type(StructureType::Dynamic);
+      output_decl.structure_type(StructureType::Dynamic);
     }
   }
   b.add_input<decl::Extend>("", "__extend__").structure_type(StructureType::Dynamic);

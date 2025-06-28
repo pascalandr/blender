@@ -21,6 +21,7 @@
 #include "RNA_access.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 
 #include "GPU_texture.hh"
 
@@ -33,8 +34,8 @@ namespace blender::nodes::node_composite_movieclip_cc {
 
 static void cmp_node_movieclip_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Image");
-  b.add_output<decl::Float>("Alpha");
+  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Alpha").structure_type(StructureType::Dynamic);
   b.add_output<decl::Float>("Offset X");
   b.add_output<decl::Float>("Offset Y");
   b.add_output<decl::Float>("Scale");

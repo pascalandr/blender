@@ -108,7 +108,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -396,7 +396,7 @@ float new_primitive_matrix(bContext *C,
 
 static void view_align_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  RNA_struct_idprops_unset(ptr, "rotation");
+  RNA_struct_system_idprops_unset(ptr, "rotation");
 }
 
 void add_unit_props_size(wmOperatorType *ot)
@@ -2138,7 +2138,6 @@ static wmOperatorStatus object_pointcloud_add_exec(bContext *C, wmOperator *op)
   Object *object = add_type(C, OB_POINTCLOUD, nullptr, loc, rot, false, local_view_bits);
   PointCloud &pointcloud = *static_cast<PointCloud *>(object->data);
   pointcloud.totpoint = 400;
-  CustomData_realloc(&pointcloud.pdata, 0, pointcloud.totpoint);
 
   bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
   bke::SpanAttributeWriter<float3> position = attributes.lookup_or_add_for_write_only_span<float3>(
@@ -2499,10 +2498,10 @@ static void make_object_duplilist_real(bContext *C,
     return;
   }
 
-  ListBase *lb_duplis = object_duplilist(depsgraph, scene, object_eval);
+  DupliList duplilist;
+  object_duplilist(depsgraph, scene, object_eval, nullptr, duplilist);
 
-  if (BLI_listbase_is_empty(lb_duplis)) {
-    free_object_duplilist(lb_duplis);
+  if (duplilist.is_empty()) {
     return;
   }
 
@@ -2516,8 +2515,8 @@ static void make_object_duplilist_real(bContext *C,
     }
   }
 
-  LISTBASE_FOREACH (DupliObject *, dob, lb_duplis) {
-    Object *ob_src = DEG_get_original(dob->ob);
+  for (DupliObject &dob : duplilist) {
+    Object *ob_src = DEG_get_original(dob.ob);
     Object *ob_dst = static_cast<Object *>(ID_NEW_SET(ob_src, BKE_id_copy(bmain, &ob_src->id)));
     id_us_min(&ob_dst->id);
 
@@ -2552,32 +2551,32 @@ static void make_object_duplilist_real(bContext *C,
     id_us_min((ID *)ob_dst->instance_collection);
     ob_dst->instance_collection = nullptr;
 
-    copy_m4_m4(ob_dst->runtime->object_to_world.ptr(), dob->mat);
+    copy_m4_m4(ob_dst->runtime->object_to_world.ptr(), dob.mat);
     BKE_object_apply_mat4(ob_dst, ob_dst->object_to_world().ptr(), false, false);
 
-    dupli_map.add(dob, ob_dst);
+    dupli_map.add(&dob, ob_dst);
 
     if (parent_gh) {
       void **val;
       /* Due to nature of hash/comparison of this ghash, a lot of duplis may be considered as
        * 'the same', this avoids trying to insert same key several time and
        * raise asserts in debug builds... */
-      if (!BLI_ghash_ensure_p(parent_gh, dob, &val)) {
+      if (!BLI_ghash_ensure_p(parent_gh, &dob, &val)) {
         *val = ob_dst;
       }
 
       if (is_dupli_instancer && instancer_gh) {
         /* Same as above, we may have several 'hits'. */
-        if (!BLI_ghash_ensure_p(instancer_gh, dob, &val)) {
+        if (!BLI_ghash_ensure_p(instancer_gh, &dob, &val)) {
           *val = ob_dst;
         }
       }
     }
   }
 
-  LISTBASE_FOREACH (DupliObject *, dob, lb_duplis) {
-    Object *ob_src = dob->ob;
-    Object *ob_dst = dupli_map.lookup(dob);
+  for (DupliObject &dob : duplilist) {
+    Object *ob_src = dob.ob;
+    Object *ob_dst = dupli_map.lookup(&dob);
 
     /* Remap new object to itself, and clear again newid pointer of orig object. */
     BKE_libblock_relink_to_newid(bmain, &ob_dst->id, 0);
@@ -2595,14 +2594,14 @@ static void make_object_duplilist_real(bContext *C,
          * they won't be read, this is simply for a hash lookup. */
         DupliObject dob_key;
         dob_key.ob = ob_src_par;
-        dob_key.type = dob->type;
-        if (dob->type == OB_DUPLICOLLECTION) {
+        dob_key.type = dob.type;
+        if (dob.type == OB_DUPLICOLLECTION) {
           memcpy(&dob_key.persistent_id[1],
-                 &dob->persistent_id[1],
-                 sizeof(dob->persistent_id[1]) * (MAX_DUPLI_RECUR - 1));
+                 &dob.persistent_id[1],
+                 sizeof(dob.persistent_id[1]) * (MAX_DUPLI_RECUR - 1));
         }
         else {
-          dob_key.persistent_id[0] = dob->persistent_id[0];
+          dob_key.persistent_id[0] = dob.persistent_id[0];
         }
         ob_dst_par = static_cast<Object *>(BLI_ghash_lookup(parent_gh, &dob_key));
       }
@@ -2631,7 +2630,7 @@ static void make_object_duplilist_real(bContext *C,
          * ignoring the first item.
          * We only check on persistent_id here, since we have no idea what object it might be. */
         memcpy(&dob_key.persistent_id[0],
-               &dob->persistent_id[1],
+               &dob.persistent_id[1],
                sizeof(dob_key.persistent_id[0]) * (MAX_DUPLI_RECUR - 1));
         ob_dst_par = static_cast<Object *>(BLI_ghash_lookup(instancer_gh, &dob_key));
       }
@@ -2649,7 +2648,7 @@ static void make_object_duplilist_real(bContext *C,
     if (ob_dst->parent) {
       /* NOTE: this may be the parent of other objects, but it should
        * still work out ok */
-      BKE_object_apply_mat4(ob_dst, dob->mat, false, true);
+      BKE_object_apply_mat4(ob_dst, dob.mat, false, true);
 
       /* to set ob_dst->orig and in case there's any other discrepancies */
       DEG_id_tag_update(&ob_dst->id, ID_RECALC_TRANSFORM);
@@ -2669,8 +2668,6 @@ static void make_object_duplilist_real(bContext *C,
   if (instancer_gh) {
     BLI_ghash_free(instancer_gh, nullptr, nullptr);
   }
-
-  free_object_duplilist(lb_duplis);
 
   BKE_main_id_newptr_and_tag_clear(bmain);
 
@@ -4247,7 +4244,7 @@ static void object_convert_ui(bContext * /*C*/, wmOperator *op)
 {
   uiLayout *layout = op->layout;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   layout->prop(op->ptr, "target", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout->prop(op->ptr, "keep_original", UI_ITEM_NONE, std::nullopt, ICON_NONE);

@@ -55,6 +55,7 @@ void DepsgraphRelationBuilder::build_scene_parameters(Scene *scene)
   /* TODO(sergey): Trace as a scene parameters. */
 
   build_idproperties(scene->id.properties);
+  build_idproperties(scene->id.system_properties);
   build_parameters(&scene->id);
   OperationKey parameters_eval_key(
       &scene->id, NodeType::PARAMETERS, OperationCode::PARAMETERS_EXIT);
@@ -71,13 +72,12 @@ void DepsgraphRelationBuilder::build_scene_compositor(Scene *scene)
   if (built_map_.check_is_built_and_tag(scene, BuilderMap::TAG_SCENE_COMPOSITOR)) {
     return;
   }
-  if (scene->nodetree == nullptr) {
+  if (scene->compositing_node_group == nullptr) {
     return;
   }
 
   /* TODO(sergey): Trace as a scene compositor. */
-
-  build_nodetree(scene->nodetree);
+  build_nodetree(scene->compositing_node_group);
 }
 
 }  // namespace blender::deg

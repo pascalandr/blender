@@ -10,7 +10,6 @@
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "GPU_shader.hh"
@@ -24,7 +23,9 @@ namespace blender::nodes::node_composite_sunbeams_cc {
 
 static void cmp_node_sunbeams_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image").default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Color>("Image")
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .structure_type(StructureType::Dynamic);
   b.add_input<decl::Vector>("Source")
       .subtype(PROP_FACTOR)
       .dimensions(2)
@@ -33,8 +34,7 @@ static void cmp_node_sunbeams_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .description(
           "The position of the source of the rays in normalized coordinates. 0 means lower left "
-          "corner and 1 means upper right corner")
-      .compositor_expects_single_value();
+          "corner and 1 means upper right corner");
   b.add_input<decl::Float>("Length")
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -42,8 +42,7 @@ static void cmp_node_sunbeams_declare(NodeDeclarationBuilder &b)
       .default_value(0.2f)
       .description(
           "The length of rays relative to the size of the image. 0 means no rays and 1 means the "
-          "rays cover the full extent of the image")
-      .compositor_expects_single_value();
+          "rays cover the full extent of the image");
 
   b.add_output<decl::Color>("Image");
 }
@@ -154,7 +153,7 @@ class SunBeamsOperation : public NodeOperation {
 
   float2 get_source()
   {
-    return this->get_input("Source").get_single_value_default(float3(0.5f, 0.5f, 0.0f)).xy();
+    return this->get_input("Source").get_single_value_default(float2(0.5f));
   }
 
   float get_length()

@@ -16,7 +16,6 @@
 
 #include "IMB_colormanagement.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "GPU_material.hh"
@@ -29,6 +28,7 @@ namespace blender::nodes::node_composite_luma_matte_cc {
 
 static void cmp_node_luma_matte_declare(NodeDeclarationBuilder &b)
 {
+  b.is_function_node();
   b.add_input<decl::Color>("Image").default_value({1.0f, 1.0f, 1.0f, 1.0f});
   b.add_input<decl::Float>("Minimum")
       .default_value(0.0f)

@@ -22,7 +22,7 @@
 #include "BKE_mesh_remesh_voxel.hh"
 #include "BKE_mesh_runtime.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
@@ -230,7 +230,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   layout->prop(ptr, "mode", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(false);
   if (mode == MOD_REMESH_VOXEL) {
@@ -247,7 +247,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
     layout->prop(ptr, "use_remove_disconnected", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     row = &layout->row(false);
-    uiLayoutSetActive(row, RNA_boolean_get(ptr, "use_remove_disconnected"));
+    row->active_set(RNA_boolean_get(ptr, "use_remove_disconnected"));
     layout->prop(ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   layout->prop(ptr, "use_smooth_shade", UI_ITEM_NONE, std::nullopt, ICON_NONE);

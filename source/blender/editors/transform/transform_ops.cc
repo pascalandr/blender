@@ -33,6 +33,7 @@
 #include "WM_types.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "ED_screen.hh"
@@ -972,6 +973,11 @@ static void TRANSFORM_OT_trackball(wmOperatorType *ot)
   properties_register(ot, P_PROPORTIONAL | P_MIRROR | P_SNAP | P_GPENCIL_EDIT | P_CENTER);
 }
 
+static void transform_set_orient_axis(Main * /*main*/, Scene * /*scene*/, PointerRNA *ptr)
+{
+  RNA_struct_property_unset(ptr, "constraint_axis");
+}
+
 static void TRANSFORM_OT_rotate(wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -996,6 +1002,10 @@ static void TRANSFORM_OT_rotate(wmOperatorType *ot)
   properties_register(ot,
                       P_ORIENT_AXIS | P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR |
                           P_GEO_SNAP | P_GPENCIL_EDIT | P_CENTER);
+
+  if (PropertyRNA *prop = RNA_struct_type_find_property(ot->srna, "orient_axis")) {
+    RNA_def_property_update_runtime(prop, transform_set_orient_axis);
+  }
 }
 
 static bool tilt_poll(bContext *C)
@@ -1393,14 +1403,14 @@ static void TRANSFORM_OT_seq_slide(wmOperatorType *ot)
 
   WM_operatortype_props_advanced_begin(ot);
 
-  properties_register(ot, P_SNAP | P_VIEW2D_EDGE_PAN);
+  properties_register(ot, P_OPTIONS | P_SNAP | P_VIEW2D_EDGE_PAN);
 }
 
 static void TRANSFORM_OT_rotate_normal(wmOperatorType *ot)
 {
   /* Identifiers. */
   ot->name = "Rotate Normals";
-  ot->description = "Rotate split normal of selected items";
+  ot->description = "Rotate custom normal of selected items";
   ot->idname = OP_NORMAL_ROTATION;
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
 

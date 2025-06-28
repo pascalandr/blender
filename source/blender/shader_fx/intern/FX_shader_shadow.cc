@@ -18,7 +18,7 @@
 #include "BKE_screen.hh"
 #include "BKE_shader_fx.h"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
@@ -82,7 +82,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   PointerRNA *ptr = shaderfx_panel_get_property_pointers(panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   layout->prop(ptr, "shadow_color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
@@ -109,7 +109,7 @@ static void blur_panel_draw(const bContext * /*C*/, Panel *panel)
 
   PointerRNA *ptr = shaderfx_panel_get_property_pointers(panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   /* Add the X, Y labels manually because size is a #PROP_PIXEL. */
   col = &layout->column(true);
@@ -135,9 +135,9 @@ static void wave_panel_draw(const bContext * /*C*/, Panel *panel)
 
   PointerRNA *ptr = shaderfx_panel_get_property_pointers(panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
-  uiLayoutSetActive(layout, RNA_boolean_get(ptr, "use_wave"));
+  layout->active_set(RNA_boolean_get(ptr, "use_wave"));
 
   layout->prop(ptr, "orientation", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
   layout->prop(ptr, "amplitude", UI_ITEM_NONE, std::nullopt, ICON_NONE);

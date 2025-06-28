@@ -11,7 +11,6 @@
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "GPU_shader.hh"
@@ -32,17 +31,18 @@ static void cmp_node_despeckle_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .compositor_domain_priority(1);
+      .compositor_domain_priority(1)
+      .structure_type(StructureType::Dynamic);
   b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
-      .compositor_domain_priority(0);
+      .compositor_domain_priority(0)
+      .structure_type(StructureType::Dynamic);
   b.add_input<decl::Float>("Color Threshold")
       .default_value(0.5f)
       .min(0.0f)
       .description(
           "Pixels are despeckled only if their color difference from the average color of their "
-          "neighbors exceeds this threshold")
-      .compositor_expects_single_value();
+          "neighbors exceeds this threshold");
   b.add_input<decl::Float>("Neighbor Threshold")
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
@@ -51,10 +51,9 @@ static void cmp_node_despeckle_declare(NodeDeclarationBuilder &b)
       .description(
           "Pixels are despeckled only if the number of pixels in their neighborhood that are "
           "different exceed this ratio threshold relative to the total number of neighbors. "
-          "Neighbors are considered different if they exceed the color threshold input")
-      .compositor_expects_single_value();
+          "Neighbors are considered different if they exceed the color threshold input");
 
-  b.add_output<decl::Color>("Image");
+  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;

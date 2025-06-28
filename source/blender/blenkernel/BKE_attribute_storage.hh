@@ -17,8 +17,10 @@
 struct BlendDataReader;
 struct BlendWriter;
 namespace blender {
+class GPointer;
+class CPPType;
 class ResourceScope;
-}
+}  // namespace blender
 
 namespace blender::bke {
 
@@ -41,6 +43,10 @@ class Attribute {
     /* The number of elements in the array. */
     int64_t size;
     ImplicitSharingPtr<> sharing_info;
+    static ArrayData ForValue(const GPointer &value, int64_t domain_size);
+    static ArrayData ForDefaultValue(const CPPType &type, int64_t domain_size);
+    static ArrayData ForUninitialized(const CPPType &type, int64_t domain_size);
+    static ArrayData ForConstructed(const CPPType &type, int64_t domain_size);
   };
   /** Data for an attribute stored as a single value for the entire domain. */
   struct SingleData {
@@ -48,6 +54,8 @@ class Attribute {
      * It's not necessary to manage a single value. */
     void *value;
     ImplicitSharingPtr<> sharing_info;
+    static SingleData ForValue(const GPointer &value);
+    static SingleData ForDefaultValue(const CPPType &type);
   };
   using DataVariant = std::variant<ArrayData, SingleData>;
   friend AttributeStorage;
@@ -100,6 +108,9 @@ class Attribute {
    * \warning Does not yet support attributes stored as a single value (#AttrStorageType::Single).
    */
   DataVariant &data_for_write();
+
+  /** Replace the attribute's data without first making the existing data mutable. */
+  void assign_data(DataVariant &&data);
 };
 
 class AttributeStorageRuntime {
@@ -133,6 +144,18 @@ class AttributeStorage : public ::AttributeStorage {
    */
   void foreach(FunctionRef<void(Attribute &)> fn);
   void foreach(FunctionRef<void(const Attribute &)> fn) const;
+  void foreach_with_stop(FunctionRef<bool(Attribute &)> fn);
+  void foreach_with_stop(FunctionRef<bool(const Attribute &)> fn) const;
+
+  /** Return the number of attributes. */
+  int count() const;
+
+  /** Return the attribute at the given index. */
+  Attribute &at_index(int index);
+  const Attribute &at_index(int index) const;
+
+  /** Return the index of the attribute with the given name, or -1 if not found. */
+  int index_of(StringRef name) const;
 
   /**
    * Try to find the attribute with a given name. The non-const overload does not make the
@@ -158,6 +181,15 @@ class AttributeStorage : public ::AttributeStorage {
 
   /** Return a possibly changed version of the input name that is unique within existing names. */
   std::string unique_name_calc(StringRef name);
+
+  /** Change the name of a single existing attribute. */
+  void rename(StringRef old_name, std::string new_name);
+
+  /**
+   * Resize the data for a given domain. New values will be default initialized (meaning no zero
+   * initialization for trivial types).
+   */
+  void resize(AttrDomain domain, int64_t new_size);
 
   /**
    * Read data owned by the #AttributeStorage struct. This works by converting the DNA-specific
@@ -203,6 +235,11 @@ inline AttrType Attribute::data_type() const
 inline const Attribute::DataVariant &Attribute::data() const
 {
   return data_;
+}
+
+inline void Attribute::assign_data(DataVariant &&data)
+{
+  data_ = std::move(data);
 }
 
 }  // namespace blender::bke

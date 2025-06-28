@@ -587,7 +587,7 @@ void outliner_collection_isolate_flag(Scene *scene,
   else {
     CollectionParent *parent;
     Collection *child = collection;
-    while ((parent = static_cast<CollectionParent *>(child->runtime.parents.first))) {
+    while ((parent = static_cast<CollectionParent *>(child->runtime->parents.first))) {
       if (parent->collection->flag & COLLECTION_IS_MASTER) {
         break;
       }
@@ -2052,7 +2052,8 @@ static void outliner_draw_separator(ARegion *region, const int x)
 
   GPU_line_width(1.0f);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformThemeColorShadeAlpha(TH_BACK, -15, -200);
 
@@ -3668,7 +3669,7 @@ static void outliner_draw_hierarchy_lines(SpaceOutliner *space_outliner,
                                           int *starty)
 {
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   uchar col[4];
 
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
@@ -3702,7 +3703,8 @@ static void outliner_draw_struct_marks(ARegion *region,
     if (TSELEM_OPEN(tselem, space_outliner)) {
       if (tselem->type == TSE_RNA_STRUCT) {
         GPUVertFormat *format = immVertexFormat();
-        uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        uint pos = GPU_vertformat_attr_add(
+            format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
         immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
         immThemeColorShadeAlpha(TH_BACK, -15, -200);
         immRectf(pos, 0, *starty + 1, int(region->v2d.cur.xmax), *starty + UI_UNIT_Y - 1);
@@ -3715,7 +3717,8 @@ static void outliner_draw_struct_marks(ARegion *region,
       outliner_draw_struct_marks(region, space_outliner, &te->subtree, starty);
       if (tselem->type == TSE_RNA_STRUCT) {
         GPUVertFormat *format = immVertexFormat();
-        uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        uint pos = GPU_vertformat_attr_add(
+            format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
         immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
         immThemeColorShadeAlpha(TH_BACK, -15, -200);
 
@@ -3730,14 +3733,13 @@ static void outliner_draw_struct_marks(ARegion *region,
   }
 }
 
-static void outliner_draw_highlights(uint pos,
-                                     const ARegion *region,
+static void outliner_draw_highlights(const ARegion *region,
                                      const SpaceOutliner *space_outliner,
                                      const float col_selection[4],
                                      const float col_active[4],
                                      const float col_highlight[4],
                                      const float col_searchmatch[4],
-                                     int start_x,
+                                     int /* start_x */,
                                      int *io_start_y)
 {
   const bool is_searching = (SEARCHING_OUTLINER(space_outliner) ||
@@ -3748,53 +3750,61 @@ static void outliner_draw_highlights(uint pos,
     const TreeStoreElem *tselem = TREESTORE(te);
     const int start_y = *io_start_y;
 
+    const float ufac = UI_UNIT_X / 20.0f;
+    const float radius = UI_UNIT_Y / 8.0f;
+    const int padding_x = 3 * UI_SCALE_FAC;
+    rctf rect{};
+    BLI_rctf_init(&rect,
+                  padding_x,
+                  int(region->v2d.cur.xmax) - padding_x,
+                  start_y + ufac,
+                  start_y + UI_UNIT_Y - ufac);
+    UI_draw_roundbox_corner_set(UI_CNR_ALL);
+
     /* Selection status. */
     if ((tselem->flag & TSE_ACTIVE) && (tselem->flag & TSE_SELECTED)) {
-      immUniformColor4fv(col_active);
-      immRectf(pos, 0, start_y, int(region->v2d.cur.xmax), start_y + UI_UNIT_Y);
+      UI_draw_roundbox_4fv(&rect, true, radius, col_active);
+
+      float col_active_outline[4];
+      UI_GetThemeColorShade4fv(TH_SELECT_ACTIVE, 40, col_active_outline);
+      UI_draw_roundbox_4fv(&rect, false, radius, col_active_outline);
     }
     else if (tselem->flag & TSE_SELECTED) {
-      immUniformColor4fv(col_selection);
-      immRectf(pos, 0, start_y, int(region->v2d.cur.xmax), start_y + UI_UNIT_Y);
+      UI_draw_roundbox_4fv(&rect, true, radius, col_selection);
     }
 
     /* Highlights. */
     if (tselem->flag & (TSE_DRAG_ANY | TSE_HIGHLIGHTED | TSE_SEARCHMATCH)) {
-      const int end_x = int(region->v2d.cur.xmax);
-
       if (tselem->flag & TSE_DRAG_ANY) {
         /* Drag and drop highlight. */
-        float col[4];
-        UI_GetThemeColorShade4fv(TH_BACK, -40, col);
+        float col_outline[4];
+        UI_GetThemeColorBlend4f(TH_TEXT, TH_BACK, 0.4f, col_outline);
 
         if (tselem->flag & TSE_DRAG_BEFORE) {
-          immUniformColor4fv(col);
-          immRectf(pos,
-                   start_x,
-                   start_y + UI_UNIT_Y - U.pixelsize,
-                   end_x,
-                   start_y + UI_UNIT_Y + U.pixelsize);
+          rect.ymax += (1.0f * UI_SCALE_FAC) + (1.0f * U.pixelsize);
+          rect.ymin = rect.ymax - (2.0f * U.pixelsize);
+          UI_draw_roundbox_4fv(&rect, true, 0.0f, col_outline);
         }
         else if (tselem->flag & TSE_DRAG_AFTER) {
-          immUniformColor4fv(col);
-          immRectf(pos, start_x, start_y - U.pixelsize, end_x, start_y + U.pixelsize);
+          rect.ymin -= (1.0f * UI_SCALE_FAC) + (1.0f * U.pixelsize);
+          rect.ymax = rect.ymin + (2.0f * U.pixelsize);
+          UI_draw_roundbox_4fv(&rect, true, 0.0f, col_outline);
         }
         else {
-          immUniformColor3fvAlpha(col, col[3] * 0.5f);
-          immRectf(pos, start_x, start_y, end_x, start_y + UI_UNIT_Y);
+          float col_bg[4];
+          UI_GetThemeColorShade4fv(TH_BACK, 40, col_bg);
+          UI_draw_roundbox_4fv_ex(&rect, col_bg, nullptr, 1.0f, col_outline, U.pixelsize, radius);
         }
       }
       else {
         if (is_searching && (tselem->flag & TSE_SEARCHMATCH)) {
           /* Search match highlights. We don't expand items when searching in the data-blocks,
            * but we still want to highlight any filter matches. */
-          immUniformColor4fv(col_searchmatch);
-          immRectf(pos, start_x, start_y, end_x, start_y + UI_UNIT_Y);
+          UI_draw_roundbox_4fv(&rect, true, radius, col_searchmatch);
         }
         else if (tselem->flag & TSE_HIGHLIGHTED) {
           /* Mouse hover highlight. */
-          immUniformColor4fv(col_highlight);
-          immRectf(pos, 0, start_y, end_x, start_y + UI_UNIT_Y);
+          UI_draw_roundbox_4fv(&rect, true, radius, col_highlight);
         }
       }
     }
@@ -3819,11 +3829,7 @@ static void outliner_draw_highlights(ARegion *region,
   col_searchmatch[3] = 0.5f;
 
   GPU_blend(GPU_BLEND_ALPHA);
-  GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-  outliner_draw_highlights(pos,
-                           region,
+  outliner_draw_highlights(region,
                            space_outliner,
                            col_selection,
                            col_active,
@@ -3831,7 +3837,6 @@ static void outliner_draw_highlights(ARegion *region,
                            col_searchmatch,
                            startx,
                            starty);
-  immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
 }
 
@@ -3925,7 +3930,7 @@ static void outliner_back(ARegion *region)
   ystart = UI_UNIT_Y * (ystart / (UI_UNIT_Y)) - OL_Y_OFFSET;
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 

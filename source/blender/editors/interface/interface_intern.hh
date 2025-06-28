@@ -20,6 +20,7 @@
 #include "DNA_listBase.h"
 #include "RNA_types.hh"
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 struct AnimationEvalContext;
@@ -1504,7 +1505,6 @@ bool ui_but_contains_point_px(const uiBut *but, const ARegion *region, const int
 
 uiBut *ui_list_find_mouse_over(const ARegion *region,
                                const wmEvent *event) ATTR_WARN_UNUSED_RESULT;
-uiBut *ui_list_find_from_row(const ARegion *region, const uiBut *row_but) ATTR_WARN_UNUSED_RESULT;
 uiBut *ui_list_row_find_mouse_over(const ARegion *region, const int xy[2])
     ATTR_NONNULL(1, 2) ATTR_WARN_UNUSED_RESULT;
 uiBut *ui_list_row_find_index(const ARegion *region,
@@ -1609,10 +1609,6 @@ void UI_OT_eyedropper_grease_pencil_color(wmOperatorType *ot);
 
 /* `templates/interface_template_asset_shelf_popover.cc` */
 std::optional<blender::StringRefNull> UI_asset_shelf_idname_from_button_context(const uiBut *but);
-
-/* `templates/interface_template_asset_view.cc` */
-
-uiListType *UI_UL_asset_view();
 
 /**
  * For use with #ui_rna_collection_search_update_fn.

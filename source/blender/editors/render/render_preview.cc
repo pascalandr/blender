@@ -33,7 +33,6 @@
 
 #include "BLO_readfile.hh"
 
-#include "DNA_brush_types.h"
 #include "DNA_camera_types.h"
 #include "DNA_collection_types.h"
 #include "DNA_light_types.h"
@@ -65,6 +64,7 @@
 #include "BKE_object.hh"
 #include "BKE_pose_backup.h"
 #include "BKE_preview_image.hh"
+#include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_texture.h"
@@ -271,7 +271,7 @@ const char *ED_preview_collection_name(const ePreviewType pr_type)
 
 static bool render_engine_supports_ray_visibility(const Scene *sce)
 {
-  return !STREQ(sce->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
+  return !STREQ(sce->r.engine, RE_engine_id_BLENDER_EEVEE);
 }
 
 static void switch_preview_collection_visibility(ViewLayer *view_layer, const ePreviewType pr_type)
@@ -400,7 +400,6 @@ static ID *duplicate_ids(ID *id, const bool allow_failure)
     }
     /* These support threading, but don't need duplicating. */
     case ID_IM:
-    case ID_BR:
       BLI_assert(BKE_previewimg_id_supports_jobs(id));
       return nullptr;
     default:
@@ -513,7 +512,7 @@ static Scene *preview_prepare_scene(
 
     if (id_type == ID_TE) {
       /* Texture is not actually rendered with engine, just set dummy value. */
-      STRNCPY(sce->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
+      STRNCPY(sce->r.engine, RE_engine_id_BLENDER_EEVEE);
     }
 
     if (id_type == ID_MA) {
@@ -1067,6 +1066,69 @@ static void action_preview_render(IconPreview *preview, IconPreviewSize *preview
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Scene Preview
+ * \{ */
+
+static bool scene_preview_is_supported(const Scene *scene)
+{
+  return scene->camera != nullptr;
+}
+
+static void scene_preview_render(IconPreview *preview,
+                                 IconPreviewSize *preview_sized,
+                                 ReportList *reports)
+{
+  Depsgraph *depsgraph = preview->depsgraph;
+  /* Not all code paths that lead to this function actually provide a depsgraph.
+   * The "Refresh Asset Preview" button (#ED_OT_lib_id_generate_preview) does,
+   * but #WM_OT_previews_ensure does not. */
+  BLI_assert(depsgraph != nullptr);
+  BLI_assert(preview->id != nullptr);
+
+  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+  Object *camera_eval = scene_eval->camera;
+  if (camera_eval == nullptr) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Scene has no camera, unable to render preview of %s without it.",
+                BKE_id_name(*preview->id));
+    return;
+  }
+
+  char err_out[256] = "";
+  /* This renders with the Workbench engine settings stored on the Scene. */
+  ImBuf *ibuf = ED_view3d_draw_offscreen_imbuf_simple(depsgraph,
+                                                      scene_eval,
+                                                      nullptr,
+                                                      OB_SOLID,
+                                                      camera_eval,
+                                                      preview_sized->sizex,
+                                                      preview_sized->sizey,
+                                                      IB_byte_data,
+                                                      V3D_OFSDRAW_NONE,
+                                                      R_ADDSKY,
+                                                      nullptr,
+                                                      nullptr,
+                                                      nullptr,
+                                                      err_out);
+
+  if (err_out[0] != '\0') {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Error rendering Scene %s preview: %s.",
+                BKE_id_name(*preview->id),
+                err_out);
+  }
+
+  if (ibuf) {
+    icon_copy_rect(ibuf, preview_sized->sizex, preview_sized->sizey, preview_sized->rect);
+    IMB_freeImBuf(ibuf);
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name New Shader Preview System
  * \{ */
 
@@ -1247,8 +1309,9 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 #if 0
   if (idtype == ID_TE) {
     Tex *tex = (Tex *)id;
-    if (tex->use_nodes && tex->nodetree)
+    if (tex->use_nodes && tex->nodetree) {
       ntreeEndExecTree(tex->nodetree);
+    }
   }
 #endif
 }
@@ -1336,32 +1399,6 @@ static void shader_preview_free(void *customdata)
 /* -------------------------------------------------------------------- */
 /** \name Icon Preview
  * \{ */
-
-static ImBuf *icon_preview_imbuf_from_brush(Brush *brush)
-{
-  if (!brush->icon_imbuf && (brush->flag & BRUSH_CUSTOM_ICON) && brush->icon_filepath[0]) {
-    const int flags = IB_byte_data | IB_multilayer | IB_metadata;
-
-    /* First use the path directly to try and load the file. */
-    char filepath[FILE_MAX];
-
-    STRNCPY(filepath, brush->icon_filepath);
-    BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(&brush->id));
-
-    /* Use default color-spaces for brushes. */
-    brush->icon_imbuf = IMB_load_image_from_filepath(filepath, flags);
-
-    if (brush->icon_imbuf) {
-      BKE_icon_changed(BKE_icon_id_ensure(&brush->id));
-    }
-  }
-
-  if (!(brush->icon_imbuf)) {
-    brush->id.icon_id = 0;
-  }
-
-  return brush->icon_imbuf;
-}
 
 static void icon_copy_rect(const ImBuf *ibuf, uint w, uint h, uint *rect)
 {
@@ -1464,21 +1501,6 @@ static void icon_preview_startjob(void *customdata, bool *stop, bool *do_update)
     *do_update = true;
 
     BKE_image_release_ibuf(ima, ibuf, nullptr);
-  }
-  else if (idtype == ID_BR) {
-    Brush *br = reinterpret_cast<Brush *>(id);
-
-    br->icon_imbuf = icon_preview_imbuf_from_brush(br);
-
-    memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(uint));
-
-    if (!(br->icon_imbuf) || !(br->icon_imbuf->byte_buffer.data)) {
-      return;
-    }
-
-    icon_copy_rect(br->icon_imbuf, sp->sizex, sp->sizey, sp->pr_rect);
-
-    *do_update = true;
   }
   else {
     /* re-use shader job */
@@ -1601,7 +1623,7 @@ static void icon_preview_startjob_all_sizes(void *customdata, wmJobWorkerStatus 
     /* TODO: Decouple the ID-type-specific render functions from this function, so that it's not
      * necessary to know here what happens inside lower-level functions. */
     const bool use_solid_render_mode = (ip->id != nullptr) &&
-                                       ELEM(GS(ip->id->name), ID_OB, ID_AC, ID_IM, ID_GR, ID_BR);
+                                       ELEM(GS(ip->id->name), ID_OB, ID_AC, ID_IM, ID_GR, ID_SCE);
     if (!use_solid_render_mode && preview_method_is_render(pr_method) &&
         !ED_check_engine_supports_preview(ip->scene))
     {
@@ -1640,6 +1662,9 @@ static void icon_preview_startjob_all_sizes(void *customdata, wmJobWorkerStatus 
         case ID_AC:
           action_preview_render(ip, cur_size);
           continue;
+        case ID_SCE:
+          scene_preview_render(ip, cur_size, worker_status->reports);
+          continue;
         default:
           /* Fall through to the same code as the `ip->id == nullptr` case. */
           break;
@@ -1676,9 +1701,6 @@ static void icon_preview_endjob(void *customdata)
 
   if (ip->id) {
 
-    if (GS(ip->id->name) == ID_BR) {
-      WM_main_add_notifier(NC_BRUSH | NA_EDITED, ip->id);
-    }
 #if 0
     if (GS(ip->id->name) == ID_MA) {
       Material *ma = (Material *)ip->id;
@@ -1963,6 +1985,9 @@ bool ED_preview_id_is_supported(const ID *id, const char **r_disabled_hint)
             collection_preview_contains_geometry_recursive((const Collection *)id),
             RPT_("Collection does not contain object types that can be rendered for the automatic "
                  "preview")};
+      case ID_SCE:
+        return {scene_preview_is_supported((const Scene *)id),
+                RPT_("Scenes without a camera do not support previews")};
       default:
         return {BKE_previewimg_id_get_p(id) != nullptr,
                 RPT_("Data-block type does not support automatic previews")};
@@ -1995,14 +2020,23 @@ void ED_preview_icon_render(
   ED_preview_ensure_dbase(true);
 
   ip.bmain = CTX_data_main(C);
-  ip.scene = scene;
-  ip.depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  if (GS(id->name) == ID_SCE) {
+    Scene *icon_scene = reinterpret_cast<Scene *>(id);
+    ip.scene = icon_scene;
+    ip.depsgraph = BKE_scene_ensure_depsgraph(
+        ip.bmain, ip.scene, BKE_view_layer_default_render(ip.scene));
+    ip.active_object = nullptr;
+  }
+  else {
+    ip.scene = scene;
+    ip.depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+    /* Control isn't given back to the caller until the preview is done. So we don't need to copy
+     * the ID to avoid thread races. */
+    ip.id_copy = duplicate_ids(id, true);
+    ip.active_object = CTX_data_active_object(C);
+  }
   ip.owner = BKE_previewimg_id_ensure(id);
   ip.id = id;
-  /* Control isn't given back to the caller until the preview is done. So we don't need to copy
-   * the ID to avoid thread races. */
-  ip.id_copy = duplicate_ids(id, true);
-  ip.active_object = CTX_data_active_object(C);
 
   prv_img->flag[icon_size] |= PRV_RENDERING;
 
@@ -2057,12 +2091,21 @@ void ED_preview_icon_job(
 
   /* customdata for preview thread */
   ip->bmain = CTX_data_main(C);
-  ip->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ip->scene = DEG_get_input_scene(ip->depsgraph);
-  ip->active_object = CTX_data_active_object(C);
+  if (GS(id->name) == ID_SCE) {
+    Scene *icon_scene = reinterpret_cast<Scene *>(id);
+    ip->scene = icon_scene;
+    ip->depsgraph = BKE_scene_ensure_depsgraph(
+        ip->bmain, ip->scene, BKE_view_layer_default_render(ip->scene));
+    ip->active_object = nullptr;
+  }
+  else {
+    ip->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+    ip->scene = DEG_get_input_scene(ip->depsgraph);
+    ip->id_copy = duplicate_ids(id, false);
+    ip->active_object = CTX_data_active_object(C);
+  }
   ip->owner = prv_img;
   ip->id = id;
-  ip->id_copy = duplicate_ids(id, false);
 
   prv_img->flag[icon_size] |= PRV_RENDERING;
 

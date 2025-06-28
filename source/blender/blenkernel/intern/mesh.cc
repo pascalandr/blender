@@ -21,12 +21,12 @@
 #include "DNA_object_types.h"
 
 #include "BLI_bounds.hh"
-#include "BLI_endian_switch.h"
 #include "BLI_hash.h"
 #include "BLI_implicit_sharing.hh"
 #include "BLI_index_range.hh"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 #include "BLI_memory_counter.hh"
 #include "BLI_resource_scope.hh"
@@ -290,53 +290,6 @@ static void mesh_foreach_path(ID *id, BPathForeachPathData *bpath_data)
   }
 }
 
-static void rename_seam_layer_to_old_name(const ListBase vertex_groups,
-                                          const Span<CustomDataLayer> vert_layers,
-                                          MutableSpan<CustomDataLayer> edge_layers,
-                                          const Span<CustomDataLayer> face_layers,
-                                          const Span<CustomDataLayer> corner_layers)
-{
-  CustomDataLayer *seam_layer = nullptr;
-  for (CustomDataLayer &layer : edge_layers) {
-    if (STREQ(layer.name, ".uv_seam")) {
-      return;
-    }
-    if (layer.type == CD_PROP_BOOL && STREQ(layer.name, "uv_seam")) {
-      seam_layer = &layer;
-    }
-  }
-
-  if (!seam_layer) {
-    return;
-  }
-
-  /* Current files are not expected to have a ".uv_seam" attribute (the old name) except in the
-   * rare case users created it themselves. If that happens, avoid renaming the current UV seam
-   * attribute so that at least it's not hidden in the old version. */
-  for (const CustomDataLayer &layer : vert_layers) {
-    if (STREQ(layer.name, ".uv_seam")) {
-      return;
-    }
-  }
-  for (const CustomDataLayer &layer : face_layers) {
-    if (STREQ(layer.name, ".uv_seam")) {
-      return;
-    }
-  }
-  for (const CustomDataLayer &layer : corner_layers) {
-    if (STREQ(layer.name, ".uv_seam")) {
-      return;
-    }
-  }
-  LISTBASE_FOREACH (const bDeformGroup *, vertex_group, &vertex_groups) {
-    if (STREQ(vertex_group->name, ".uv_seam")) {
-      return;
-    }
-  }
-
-  STRNCPY(seam_layer->name, ".uv_seam");
-}
-
 static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   using namespace blender;
@@ -356,6 +309,23 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
   mesh->totface_legacy = 0;
   mesh->fdata_legacy = CustomData{};
 
+  /* Convert from the format still used at runtime (flags on #CustomDataLayer) to the format
+   * reserved for future runtime use (names stored on #Mesh). */
+  if (const char *name = CustomData_get_active_layer_name(&mesh->corner_data, CD_PROP_FLOAT2)) {
+    mesh->active_uv_map_attribute = const_cast<char *>(
+        scope.allocator().copy_string(name).c_str());
+  }
+  else {
+    mesh->active_uv_map_attribute = nullptr;
+  }
+  if (const char *name = CustomData_get_render_layer_name(&mesh->corner_data, CD_PROP_FLOAT2)) {
+    mesh->default_uv_map_attribute = const_cast<char *>(
+        scope.allocator().copy_string(name).c_str());
+  }
+  else {
+    mesh->default_uv_map_attribute = nullptr;
+  }
+
   /* Do not store actual geometry data in case this is a library override ID. */
   if (ID_IS_OVERRIDE_LIBRARY(mesh) && !is_undo) {
     mesh->verts_num = 0;
@@ -372,12 +342,7 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
     mesh->face_offset_indices = nullptr;
   }
   else {
-    attribute_storage_blend_write_prepare(mesh->attribute_storage.wrap(),
-                                          {{AttrDomain::Point, &vert_layers},
-                                           {AttrDomain::Edge, &edge_layers},
-                                           {AttrDomain::Face, &face_layers},
-                                           {AttrDomain::Corner, &loop_layers}},
-                                          attribute_data);
+    attribute_storage_blend_write_prepare(mesh->attribute_storage.wrap(), attribute_data);
     CustomData_blend_write_prepare(
         mesh->vert_data, AttrDomain::Point, mesh->verts_num, vert_layers, attribute_data);
     CustomData_blend_write_prepare(
@@ -388,13 +353,6 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
         mesh->corner_data, AttrDomain::Corner, mesh->corners_num, loop_layers, attribute_data);
     mesh->attribute_storage.dna_attributes = attribute_data.attributes.data();
     mesh->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
-    if (!is_undo) {
-      /* Write forward compatible format. To be removed in 5.0. */
-      rename_seam_layer_to_old_name(
-          mesh->vertex_group_names, vert_layers, edge_layers, face_layers, loop_layers);
-      mesh_sculpt_mask_to_legacy(vert_layers);
-      mesh_custom_normals_to_legacy(loop_layers);
-    }
   }
 
   const blender::bke::MeshRuntime *mesh_runtime = mesh->runtime;
@@ -406,6 +364,8 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
   BKE_defbase_blend_write(writer, &mesh->vertex_group_names);
   BLO_write_string(writer, mesh->active_color_attribute);
   BLO_write_string(writer, mesh->default_color_attribute);
+  BLO_write_string(writer, mesh->active_uv_map_attribute);
+  BLO_write_string(writer, mesh->default_uv_map_attribute);
 
   BLO_write_pointer_array(writer, mesh->totcol, mesh->mat);
   BLO_write_struct_array(writer, MSelect, mesh->totselect, mesh->mselect);
@@ -492,12 +452,9 @@ static void mesh_blend_read_data(BlendDataReader *reader, ID *id)
     mesh->totselect = 0;
   }
 
-  if (BLO_read_requires_endian_switch(reader) && mesh->tface) {
-    TFace *tf = mesh->tface;
-    for (int i = 0; i < mesh->totface_legacy; i++, tf++) {
-      BLI_endian_switch_uint32_array(tf->col, 4);
-    }
-  }
+  /* NOTE: this is endianness-sensitive. */
+  /* Each legacy TFace would need to undo the automatic DNA switch of its array of four uint32_t
+   * RGBA colors. */
 }
 
 IDTypeInfo IDType_ID_ME = {

@@ -306,7 +306,7 @@ class Meshes : Overlay {
       return;
     }
 
-    ResourceHandle res_handle = manager.unique_handle(ob_ref);
+    ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 
     Object *ob = ob_ref.object;
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
@@ -604,7 +604,7 @@ class MeshUVs : Overlay {
         const bool hide_faces = space_image->flag & SI_NO_DRAWFACES;
         select_face_ = !show_mesh_analysis_ && !hide_faces;
 
-        if (tool_setting->uv_flag & UV_SYNC_SELECTION) {
+        if (tool_setting->uv_flag & UV_FLAG_SYNC_SELECT) {
           const char sel_mode_3d = tool_setting->selectmode;
           if (tool_setting->uv_sticky == SI_STICKY_VERTEX) {
             /* NOTE: Ignore #SCE_SELECT_VERTEX because a single selected edge
@@ -783,7 +783,7 @@ class MeshUVs : Overlay {
     const bool has_active_object_uvmap = CustomData_get_active_layer(&mesh.corner_data,
                                                                      CD_PROP_FLOAT2) != -1;
 
-    ResourceHandle res_handle = manager.unique_handle(ob_ref);
+    ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 
     if (show_wireframe_ && has_active_object_uvmap) {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_uv_wireframe(*ob, mesh);
@@ -816,7 +816,7 @@ class MeshUVs : Overlay {
                                                               &mesh.runtime->edit_mesh->bm->ldata,
                                                               CD_PROP_FLOAT2) != -1);
 
-    ResourceHandle res_handle = manager.unique_handle(ob_ref);
+    ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
 
     if (has_active_edit_uvmap && is_uv_editable) {
       if (show_uv_edit_) {

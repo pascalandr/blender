@@ -14,6 +14,7 @@
 #include "BKE_node.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_view2d.hh"
 
 struct ARegion;
@@ -300,6 +301,7 @@ void NODE_OT_add_material(wmOperatorType *ot);
 void NODE_OT_add_color(wmOperatorType *ot);
 void NODE_OT_add_import_node(wmOperatorType *ot);
 void NODE_OT_new_node_tree(wmOperatorType *ot);
+void NODE_OT_new_compositing_node_group(wmOperatorType *ot);
 void NODE_OT_add_group_input_node(wmOperatorType *ot);
 
 /* `node_group.cc` */
@@ -406,7 +408,6 @@ void NODE_GGT_backdrop_sun_beams(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_corner_pin(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_box_mask(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_ellipse_mask(wmGizmoGroupType *gzgt);
-void NODE_GGT_backdrop_split(wmGizmoGroupType *gzgt);
 
 /* `node_geometry_attribute_search.cc` */
 
@@ -440,5 +441,9 @@ void invoke_node_link_drag_add_menu(bContext &C,
 MenuType add_catalog_assets_menu_type();
 MenuType add_unassigned_assets_menu_type();
 MenuType add_root_catalogs_menu_type();
+
+/* `node_sync_sockets.cc` */
+
+void NODE_OT_sockets_sync(wmOperatorType *ot);
 
 }  // namespace blender::ed::space_node

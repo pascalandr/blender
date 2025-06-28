@@ -38,6 +38,7 @@
 #include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "ED_anim_api.hh"
@@ -88,7 +89,7 @@ static PointerRNA *fmodifier_get_pointers(const bContext *C, const Panel *panel,
 
   if (C != nullptr && CTX_wm_space_graph(C)) {
     const FCurve *fcu = ANIM_graph_context_fcurve(C);
-    uiLayoutSetActive(panel->layout, !(fcu->flag & FCURVE_MOD_OFF));
+    panel->layout->active_set(!(fcu->flag & FCURVE_MOD_OFF));
   }
 
   return ptr;
@@ -258,7 +259,7 @@ static void fmodifier_influence_draw(uiLayout *layout, PointerRNA *ptr)
   row->prop(ptr, "use_influence", UI_ITEM_NONE, "", ICON_NONE);
   uiLayout *sub = &row->row(true);
 
-  uiLayoutSetActive(sub, fcm->flag & FMODIFIER_FLAG_USEINFLUENCE);
+  sub->active_set(fcm->flag & FMODIFIER_FLAG_USEINFLUENCE);
   sub->prop(ptr, "influence", UI_ITEM_NONE, "", ICON_NONE);
 }
 
@@ -278,11 +279,11 @@ static void fmodifier_frame_range_draw(const bContext *C, Panel *panel)
 
   PointerRNA *ptr = fmodifier_get_pointers(C, panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   FModifier *fcm = static_cast<FModifier *>(ptr->data);
-  uiLayoutSetActive(layout, fcm->flag & FMODIFIER_FLAG_RANGERESTRICT);
+  layout->active_set(fcm->flag & FMODIFIER_FLAG_RANGERESTRICT);
 
   col = &layout->column(true);
   col->prop(ptr, "frame_start", UI_ITEM_NONE, IFACE_("Start"), ICON_NONE);
@@ -302,7 +303,7 @@ static void fmodifier_panel_header(const bContext *C, Panel *panel)
   FModifier *fcm = static_cast<FModifier *>(ptr->data);
   const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
 
-  uiBlock *block = uiLayoutGetBlock(layout);
+  uiBlock *block = layout->block();
 
   uiLayout *sub = &layout->row(true);
 
@@ -318,8 +319,8 @@ static void fmodifier_panel_header(const bContext *C, Panel *panel)
   }
   /* Right align. */
   sub = &layout->row(true);
-  uiLayoutSetAlignment(sub, UI_LAYOUT_ALIGN_RIGHT);
-  uiLayoutSetEmboss(sub, blender::ui::EmbossType::None);
+  sub->alignment_set(blender::ui::LayoutAlign::Right);
+  sub->emboss_set(blender::ui::EmbossType::None);
 
   /* 'Mute' button. */
   sub->prop(ptr, "mute", UI_ITEM_R_ICON_ONLY, "", ICON_NONE);
@@ -364,8 +365,8 @@ static void generator_panel_draw(const bContext *C, Panel *panel)
 
   layout->prop(ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   layout->prop(ptr, "use_additive", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
@@ -447,8 +448,8 @@ static void fn_generator_panel_draw(const bContext *C, Panel *panel)
 
   layout->prop(ptr, "function_type", UI_ITEM_NONE, "", ICON_NONE);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   col = &layout->column(false);
   col->prop(ptr, "use_additive", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -490,8 +491,8 @@ static void cycles_panel_draw(const bContext *C, Panel *panel)
 
   PointerRNA *ptr = fmodifier_get_pointers(C, panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   /* Before. */
   col = &layout->column(false);
@@ -534,8 +535,8 @@ static void noise_panel_draw(const bContext *C, Panel *panel)
 
   PointerRNA *ptr = fmodifier_get_pointers(C, panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   layout->prop(ptr, "blend_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
@@ -672,8 +673,8 @@ static void envelope_panel_draw(const bContext *C, Panel *panel)
   FModifier *fcm = static_cast<FModifier *>(ptr->data);
   FMod_Envelope *env = static_cast<FMod_Envelope *>(fcm->data);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   /* General settings. */
   col = &layout->column(true);
@@ -684,7 +685,7 @@ static void envelope_panel_draw(const bContext *C, Panel *panel)
   /* Control points list. */
 
   row = &layout->row(false);
-  uiBlock *block = uiLayoutGetBlock(row);
+  uiBlock *block = row->block();
 
   uiBut *but = uiDefBut(block,
                         UI_BTYPE_BUT,
@@ -701,7 +702,7 @@ static void envelope_panel_draw(const bContext *C, Panel *panel)
   UI_but_func_set(but, fmod_envelope_addpoint_cb, env, nullptr);
 
   col = &layout->column(false);
-  uiLayoutSetPropSep(col, false);
+  col->use_property_split_set(false);
 
   FCM_EnvelopeData *fed = env->data;
   for (int i = 0; i < env->totvert; i++, fed++) {
@@ -710,7 +711,7 @@ static void envelope_panel_draw(const bContext *C, Panel *panel)
 
     /* get a new row to operate on */
     row = &col->row(true);
-    block = uiLayoutGetBlock(row);
+    block = row->block();
 
     row->prop(&ctrl_ptr, "frame", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     row->prop(&ctrl_ptr, "min", UI_ITEM_NONE, IFACE_("Min"), ICON_NONE);
@@ -763,21 +764,21 @@ static void limits_panel_draw(const bContext *C, Panel *panel)
 
   PointerRNA *ptr = fmodifier_get_pointers(C, panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   /* Minimums. */
   col = &layout->column(false);
   row = &col->row(true, IFACE_("Minimum X"));
   row->prop(ptr, "use_min_x", UI_ITEM_NONE, "", ICON_NONE);
   sub = &row->column(true);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_min_x"));
+  sub->active_set(RNA_boolean_get(ptr, "use_min_x"));
   sub->prop(ptr, "min_x", UI_ITEM_NONE, "", ICON_NONE);
 
   row = &col->row(true, IFACE_("Y"));
   row->prop(ptr, "use_min_y", UI_ITEM_NONE, "", ICON_NONE);
   sub = &row->column(true);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_min_y"));
+  sub->active_set(RNA_boolean_get(ptr, "use_min_y"));
   sub->prop(ptr, "min_y", UI_ITEM_NONE, "", ICON_NONE);
 
   /* Maximums. */
@@ -785,13 +786,13 @@ static void limits_panel_draw(const bContext *C, Panel *panel)
   row = &col->row(true, IFACE_("Maximum X"));
   row->prop(ptr, "use_max_x", UI_ITEM_NONE, "", ICON_NONE);
   sub = &row->column(true);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_max_x"));
+  sub->active_set(RNA_boolean_get(ptr, "use_max_x"));
   sub->prop(ptr, "max_x", UI_ITEM_NONE, "", ICON_NONE);
 
   row = &col->row(true, IFACE_("Y"));
   row->prop(ptr, "use_max_y", UI_ITEM_NONE, "", ICON_NONE);
   sub = &row->column(true);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_max_y"));
+  sub->active_set(RNA_boolean_get(ptr, "use_max_y"));
   sub->prop(ptr, "max_y", UI_ITEM_NONE, "", ICON_NONE);
 
   fmodifier_influence_draw(layout, ptr);
@@ -825,8 +826,8 @@ static void stepped_panel_draw(const bContext *C, Panel *panel)
 
   PointerRNA *ptr = fmodifier_get_pointers(C, panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   /* Stepping Settings. */
   col = &layout->column(false);
@@ -837,14 +838,14 @@ static void stepped_panel_draw(const bContext *C, Panel *panel)
   row = &layout->row(true, IFACE_("Start Frame"));
   row->prop(ptr, "use_frame_start", UI_ITEM_NONE, "", ICON_NONE);
   sub = &row->column(true);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_frame_start"));
+  sub->active_set(RNA_boolean_get(ptr, "use_frame_start"));
   sub->prop(ptr, "frame_start", UI_ITEM_NONE, "", ICON_NONE);
 
   /* End range settings. */
   row = &layout->row(true, IFACE_("End Frame"));
   row->prop(ptr, "use_frame_end", UI_ITEM_NONE, "", ICON_NONE);
   sub = &row->column(true);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_frame_end"));
+  sub->active_set(RNA_boolean_get(ptr, "use_frame_end"));
   sub->prop(ptr, "frame_end", UI_ITEM_NONE, "", ICON_NONE);
 
   fmodifier_influence_draw(layout, ptr);

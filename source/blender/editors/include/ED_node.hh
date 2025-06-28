@@ -13,7 +13,9 @@
 
 #include "BKE_compute_context_cache_fwd.hh"
 
+#include "NOD_geometry_nodes_bundle_signature.hh"
 #include "NOD_geometry_nodes_closure_location.hh"
+#include "NOD_geometry_nodes_closure_signature.hh"
 #include "NOD_nested_node_id.hh"
 
 #include "ED_node_c.hh"
@@ -130,6 +132,23 @@ bool node_editor_is_for_geometry_nodes_modifier(const SpaceNode &snode,
     bke::ComputeContextCache &compute_context_cache,
     const std::optional<nodes::ClosureSourceLocation> &source_location);
 
+Vector<nodes::BundleSignature> gather_linked_target_bundle_signatures(
+    const ComputeContext *bundle_socket_context,
+    const bNodeSocket &bundle_socket,
+    bke::ComputeContextCache &compute_context_cache);
+Vector<nodes::BundleSignature> gather_linked_origin_bundle_signatures(
+    const ComputeContext *bundle_socket_context,
+    const bNodeSocket &bundle_socket,
+    bke::ComputeContextCache &compute_context_cache);
+Vector<nodes::ClosureSignature> gather_linked_target_closure_signatures(
+    const ComputeContext *closure_socket_context,
+    const bNodeSocket &closure_socket,
+    bke::ComputeContextCache &compute_context_cache);
+Vector<nodes::ClosureSignature> gather_linked_origin_closure_signatures(
+    const ComputeContext *closure_socket_context,
+    const bNodeSocket &closure_socket,
+    bke::ComputeContextCache &compute_context_cache);
+
 /**
  * Creates a compute context for the given zone. It takes e.g. the current inspection index into
  * account.
@@ -142,5 +161,20 @@ bool node_editor_is_for_geometry_nodes_modifier(const SpaceNode &snode,
 void ui_template_node_asset_menu_items(uiLayout &layout,
                                        const bContext &C,
                                        StringRef catalog_path);
+
+void sync_sockets_evaluate_closure(SpaceNode &snode,
+                                   bNode &evaluate_closure_node,
+                                   ReportList *reports);
+void sync_sockets_separate_bundle(SpaceNode &snode,
+                                  bNode &separate_bundle_node,
+                                  ReportList *reports);
+void sync_sockets_combine_bundle(SpaceNode &snode,
+                                 bNode &combine_bundle_node,
+                                 ReportList *reports);
+void sync_sockets_closure(SpaceNode &snode,
+                          bNode &closure_input_node,
+                          bNode &closure_output_node,
+                          const bool initialize_internal_links,
+                          ReportList *reports);
 
 }  // namespace blender::ed::space_node

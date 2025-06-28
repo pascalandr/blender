@@ -19,7 +19,7 @@
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
@@ -80,7 +80,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   int solidify_mode = RNA_enum_get(ptr, "solidify_mode");
   bool has_vertex_group = RNA_string_length(ptr, "vertex_group") != 0;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   layout->prop(ptr, "solidify_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
@@ -103,19 +103,19 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   col = &layout->column(false, CTX_IFACE_(BLT_I18NCONTEXT_ID_MESH, "Rim"));
   col->prop(ptr, "use_rim", UI_ITEM_NONE, CTX_IFACE_(BLT_I18NCONTEXT_ID_MESH, "Fill"), ICON_NONE);
   sub = &col->column(false);
-  uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_rim"));
+  sub->active_set(RNA_boolean_get(ptr, "use_rim"));
   sub->prop(ptr, "use_rim_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   layout->separator();
 
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
   row = &layout->row(false);
-  uiLayoutSetActive(row, has_vertex_group);
+  row->active_set(has_vertex_group);
   row->prop(ptr, "thickness_vertex_group", UI_ITEM_NONE, IFACE_("Factor"), ICON_NONE);
 
   if (solidify_mode == MOD_SOLIDIFY_MODE_NONMANIFOLD) {
     row = &layout->row(false);
-    uiLayoutSetActive(row, has_vertex_group);
+    row->active_set(has_vertex_group);
     row->prop(ptr, "use_flat_faces", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
@@ -132,7 +132,7 @@ static void normals_panel_draw(const bContext * /*C*/, Panel *panel)
 
   int solidify_mode = RNA_enum_get(ptr, "solidify_mode");
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(false);
   col->prop(ptr, "use_flip_normals", UI_ITEM_NONE, IFACE_("Flip"), ICON_NONE);
@@ -149,11 +149,11 @@ static void materials_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   layout->prop(ptr, "material_offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col = &layout->column(true);
-  uiLayoutSetActive(col, RNA_boolean_get(ptr, "use_rim"));
+  col->active_set(RNA_boolean_get(ptr, "use_rim"));
   col->prop(ptr,
             "material_offset_rim",
             UI_ITEM_NONE,
@@ -170,7 +170,7 @@ static void edge_data_panel_draw(const bContext * /*C*/, Panel *panel)
 
   int solidify_mode = RNA_enum_get(ptr, "solidify_mode");
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   if (solidify_mode == MOD_SOLIDIFY_MODE_EXTRUDE) {
     uiLayout *col;
@@ -194,12 +194,12 @@ static void clamp_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(false);
   col->prop(ptr, "thickness_clamp", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   row = &col->row(false);
-  uiLayoutSetActive(row, RNA_float_get(ptr, "thickness_clamp") > 0.0f);
+  row->active_set(RNA_float_get(ptr, "thickness_clamp") > 0.0f);
   row->prop(ptr, "use_thickness_angle_clamp", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
@@ -211,18 +211,17 @@ static void vertex_group_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   col = &layout->column(false);
-  uiItemPointerR(
-      col, ptr, "shell_vertex_group", &ob_ptr, "vertex_groups", IFACE_("Shell"), ICON_NONE);
-  uiItemPointerR(col,
-                 ptr,
-                 "rim_vertex_group",
-                 &ob_ptr,
-                 "vertex_groups",
-                 CTX_IFACE_(BLT_I18NCONTEXT_ID_MESH, "Rim"),
-                 ICON_NONE);
+  col->prop_search(
+      ptr, "shell_vertex_group", &ob_ptr, "vertex_groups", IFACE_("Shell"), ICON_NONE);
+  col->prop_search(ptr,
+                   "rim_vertex_group",
+                   &ob_ptr,
+                   "vertex_groups",
+                   CTX_IFACE_(BLT_I18NCONTEXT_ID_MESH, "Rim"),
+                   ICON_NONE);
 }
 
 static void panel_register(ARegionType *region_type)

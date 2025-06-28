@@ -11,7 +11,7 @@
 #include "NOD_socket_items_ui.hh"
 #include "NOD_socket_search_link.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "BLI_path_utils.hh"
@@ -142,8 +142,8 @@ static void draw_bake_items(const bContext *C, uiLayout *layout, PointerRNA node
     socket_items::ui::draw_active_item_props<BakeItemsAccessor>(
         tree, node, [&](PointerRNA *item_ptr) {
           const NodeGeometryBakeItem &active_item = storage.items[storage.active_index];
-          uiLayoutSetPropSep(panel, true);
-          uiLayoutSetPropDecorate(panel, false);
+          panel->use_property_split_set(true);
+          panel->use_property_decorate_set(false);
           panel->prop(item_ptr, "socket_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
           if (socket_type_supports_fields(eNodeSocketDatatype(active_item.socket_type))) {
             panel->prop(item_ptr, "attribute_domain", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -509,12 +509,12 @@ static void node_layout(uiLayout *layout, bContext *C, PointerRNA *ptr)
   if (!get_bake_draw_context(C, node, ctx)) {
     return;
   }
-  uiLayoutSetActive(layout, ctx.is_bakeable_in_current_context);
-  uiLayoutSetEnabled(layout, ID_IS_EDITABLE(ctx.object));
+  layout->active_set(ctx.is_bakeable_in_current_context);
+  layout->enabled_set(ID_IS_EDITABLE(ctx.object));
   uiLayout *col = &layout->column(false);
   {
     uiLayout *row = &col->row(true);
-    uiLayoutSetEnabled(row, !ctx.is_baked);
+    row->enabled_set(!ctx.is_baked);
     row->prop(&ctx.bake_rna, "bake_mode", UI_ITEM_R_EXPAND, IFACE_("Mode"), ICON_NONE);
   }
   draw_bake_button_row(ctx, col);
@@ -530,14 +530,14 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
     return;
   }
 
-  uiLayoutSetActive(layout, ctx.is_bakeable_in_current_context);
-  uiLayoutSetEnabled(layout, ID_IS_EDITABLE(ctx.object));
+  layout->active_set(ctx.is_bakeable_in_current_context);
+  layout->enabled_set(ID_IS_EDITABLE(ctx.object));
 
   {
     uiLayout *col = &layout->column(false);
     {
       uiLayout *row = &col->row(true);
-      uiLayoutSetEnabled(row, !ctx.is_baked);
+      row->enabled_set(!ctx.is_baked);
       row->prop(&ctx.bake_rna, "bake_mode", UI_ITEM_R_EXPAND, IFACE_("Mode"), ICON_NONE);
     }
 
@@ -749,7 +749,7 @@ void draw_bake_button_row(const BakeDrawContext &ctx, uiLayout *layout, const bo
   }
   {
     uiLayout *subrow = &row->row(true);
-    uiLayoutSetActive(subrow, ctx.is_baked);
+    subrow->active_set(ctx.is_baked);
     if (is_in_sidebar) {
       if (ctx.is_baked && !G.is_rendering) {
         if (ctx.bake->packed) {
@@ -799,20 +799,20 @@ void draw_bake_button_row(const BakeDrawContext &ctx, uiLayout *layout, const bo
 
 void draw_common_bake_settings(bContext *C, BakeDrawContext &ctx, uiLayout *layout)
 {
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   uiLayout *settings_col = &layout->column(false);
-  uiLayoutSetActive(settings_col, !ctx.is_baked);
+  settings_col->active_set(!ctx.is_baked);
   {
     uiLayout *col = &settings_col->column(true);
     col->prop(&ctx.bake_rna, "bake_target", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     uiLayout *subcol = &col->column(true);
-    uiLayoutSetActive(subcol, ctx.bake_target == NODES_MODIFIER_BAKE_TARGET_DISK);
+    subcol->active_set(ctx.bake_target == NODES_MODIFIER_BAKE_TARGET_DISK);
     subcol->prop(&ctx.bake_rna, "use_custom_path", UI_ITEM_NONE, IFACE_("Custom Path"), ICON_NONE);
     uiLayout *subsubcol = &subcol->column(true);
     const bool use_custom_path = ctx.bake->flag & NODES_MODIFIER_BAKE_CUSTOM_PATH;
-    uiLayoutSetActive(subsubcol, use_custom_path);
+    subsubcol->active_set(use_custom_path);
     Main *bmain = CTX_data_main(C);
     auto bake_path = bke::bake::get_node_bake_path(*bmain, *ctx.object, *ctx.nmd, ctx.bake->id);
 
@@ -844,7 +844,7 @@ void draw_common_bake_settings(bContext *C, BakeDrawContext &ctx, uiLayout *layo
               IFACE_("Custom Range"),
               ICON_NONE);
     uiLayout *subcol = &col->column(true);
-    uiLayoutSetActive(subcol, ctx.bake->flag & NODES_MODIFIER_BAKE_CUSTOM_SIMULATION_FRAME_RANGE);
+    subcol->active_set(ctx.bake->flag & NODES_MODIFIER_BAKE_CUSTOM_SIMULATION_FRAME_RANGE);
     subcol->prop(&ctx.bake_rna, "frame_start", UI_ITEM_NONE, IFACE_("Start"), ICON_NONE);
     subcol->prop(&ctx.bake_rna, "frame_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
   }

@@ -48,7 +48,6 @@
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 
 namespace blender::ed::greasepencil {
@@ -263,9 +262,12 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
 static void draw_control_points(PrimitiveToolOperation &ptd)
 {
   GPUVertFormat *format3d = immVertexFormat();
-  const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  const uint col3d = GPU_vertformat_attr_add(format3d, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-  const uint siz3d = GPU_vertformat_attr_add(format3d, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  const uint pos3d = GPU_vertformat_attr_add(
+      format3d, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  const uint col3d = GPU_vertformat_attr_add(
+      format3d, "color", blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
+  const uint siz3d = GPU_vertformat_attr_add(
+      format3d, "size", blender::gpu::VertAttrType::SFLOAT_32);
   immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
 
   GPU_program_point_size(true);
@@ -526,7 +528,11 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
     new_opacities[point] = ed::greasepencil::randomize_opacity(
         *ptd.settings, ptd.stroke_random_opacity_factor, lengths[point], opacity, pressure);
     if (ptd.vertex_color) {
+      std::optional<BrushColorJitterSettings> jitter_settings =
+          BKE_brush_color_jitter_get_settings(&ptd.vc.scene->toolsettings->gp_paint->paint,
+                                              ptd.brush);
       new_vertex_colors[point] = ed::greasepencil::randomize_color(*ptd.settings,
+                                                                   jitter_settings,
                                                                    ptd.stroke_random_hue_factor,
                                                                    ptd.stroke_random_sat_factor,
                                                                    ptd.stroke_random_val_factor,

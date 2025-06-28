@@ -22,7 +22,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_types.hh"
 
 #include "BLT_translation.hh"
 
@@ -130,10 +130,10 @@ static void initSeqSlide(TransInfo *t, wmOperator *op)
   t->num.flag = 0;
   t->num.idx_max = t->idx_max;
 
-  t->snap[0] = floorf(t->scene->r.frs_sec / t->scene->r.frs_sec_base);
-  t->snap[1] = 10.0f;
+  t->increment = float3(floorf(t->scene->r.frs_sec / t->scene->r.frs_sec_base));
+  t->increment_precision = 10.0f / t->increment[0];
 
-  copy_v3_fl(t->num.val_inc, t->snap[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;
   /* Would be nice to have a time handling in units as well
    * (supporting frames in addition to "natural" time...). */
@@ -143,9 +143,6 @@ static void initSeqSlide(TransInfo *t, wmOperator *op)
 
 bool transform_mode_edge_seq_slide_use_restore_handle_selection(const TransInfo *t)
 {
-  if ((U.sequencer_editor_flag & USER_SEQ_ED_SIMPLE_TWEAKING) == 0) {
-    return false;
-  }
   SeqSlideParams *ssp = static_cast<SeqSlideParams *>(t->custom.mode.data);
   if (ssp == nullptr) {
     return false;

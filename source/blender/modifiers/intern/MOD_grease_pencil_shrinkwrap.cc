@@ -30,7 +30,7 @@
 
 #include "GEO_smooth_curves.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "BLT_translation.hh"
@@ -247,7 +247,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   int wrap_method = RNA_enum_get(ptr, "wrap_method");
   uiLayout *col, *row;
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   layout->prop(ptr, "wrap_method", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
@@ -274,9 +274,8 @@ static void panel_draw(const bContext *C, Panel *panel)
 
     layout->prop(ptr, "cull_face", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
     col = &layout->column(false);
-    uiLayoutSetActive(col,
-                      RNA_boolean_get(ptr, "use_negative_direction") &&
-                          RNA_enum_get(ptr, "cull_face") != 0);
+    col->active_set(RNA_boolean_get(ptr, "use_negative_direction") &&
+                    RNA_enum_get(ptr, "cull_face") != 0);
     col->prop(ptr, "use_invert_cull", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
@@ -286,7 +285,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   }
   layout->prop(ptr, "offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiLayoutSetPropSep(layout, true);
+  layout->use_property_split_set(true);
 
   layout->prop(ptr, "smooth_factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout->prop(ptr, "smooth_step", UI_ITEM_NONE, IFACE_("Repeat"), ICON_NONE);

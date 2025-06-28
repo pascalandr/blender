@@ -46,6 +46,7 @@
 #include "ED_screen.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "WM_api.hh"
@@ -1193,7 +1194,7 @@ static void buttons_panel_context_draw(const bContext *C, Panel *panel)
   }
 
   uiLayout *row = &panel->layout->row(true);
-  uiLayoutSetAlignment(row, UI_LAYOUT_ALIGN_LEFT);
+  row->alignment_set(blender::ui::LayoutAlign::Left);
 
   bool first = true;
   for (int i = 0; i < path->len; i++) {
@@ -1250,9 +1251,9 @@ static void buttons_panel_context_draw(const bContext *C, Panel *panel)
   }
 
   uiLayout *pin_row = &row->row(false);
-  uiLayoutSetAlignment(pin_row, UI_LAYOUT_ALIGN_RIGHT);
-  uiItemSpacer(pin_row);
-  uiLayoutSetEmboss(pin_row, blender::ui::EmbossType::None);
+  pin_row->alignment_set(blender::ui::LayoutAlign::Right);
+  pin_row->separator_spacer();
+  pin_row->emboss_set(blender::ui::EmbossType::None);
   pin_row->op(
       "BUTTONS_OT_toggle_pin", "", (sbuts->flag & SB_PIN_CONTEXT) ? ICON_PINNED : ICON_UNPINNED);
 }

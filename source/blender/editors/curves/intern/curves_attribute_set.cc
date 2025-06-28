@@ -25,7 +25,7 @@
 
 #include "RNA_access.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "DNA_object_types.h"
@@ -186,8 +186,8 @@ static wmOperatorStatus set_attribute_invoke(bContext *C, wmOperator *op, const 
 static void set_attribute_ui(bContext *C, wmOperator *op)
 {
   uiLayout *layout = &op->layout->column(true);
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
 
   Object *object = CTX_data_active_object(C);
   Curves &curves_id = *static_cast<Curves *>(object->data);

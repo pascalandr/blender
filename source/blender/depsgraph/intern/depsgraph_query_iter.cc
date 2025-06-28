@@ -62,19 +62,19 @@ void deg_invalidate_iterator_work_data(DEGObjectIterData *data)
 #endif
 }
 
-void ensure_id_properties_freed(const Object *dupli_object, Object *temp_dupli_object)
+void ensure_id_properties_freed(const IDProperty *dupli_idprops, IDProperty **temp_dupli_idprops)
 {
-  if (temp_dupli_object->id.properties == nullptr) {
+  if (*temp_dupli_idprops == nullptr) {
     /* No ID properties in temp data-block -- no leak is possible. */
     return;
   }
-  if (temp_dupli_object->id.properties == dupli_object->id.properties) {
+  if (*temp_dupli_idprops == dupli_idprops) {
     /* Temp copy of object did not modify ID properties. */
     return;
   }
   /* Free memory which is owned by temporary storage which is about to get overwritten. */
-  IDP_FreeProperty(temp_dupli_object->id.properties);
-  temp_dupli_object->id.properties = nullptr;
+  IDP_FreeProperty(*temp_dupli_idprops);
+  *temp_dupli_idprops = nullptr;
 }
 
 void free_owned_memory(DEGObjectIterData *data)
@@ -87,7 +87,9 @@ void free_owned_memory(DEGObjectIterData *data)
   const Object *dupli_object = data->dupli_object_current->ob;
   Object *temp_dupli_object = &data->temp_dupli_object;
 
-  ensure_id_properties_freed(dupli_object, temp_dupli_object);
+  ensure_id_properties_freed(dupli_object->id.properties, &temp_dupli_object->id.properties);
+  ensure_id_properties_freed(dupli_object->id.system_properties,
+                             &temp_dupli_object->id.system_properties);
 }
 
 bool deg_object_hide_original(eEvaluationMode eval_mode, Object *ob, DupliObject *dob)
@@ -113,17 +115,17 @@ bool deg_object_hide_original(eEvaluationMode eval_mode, Object *ob, DupliObject
   return false;
 }
 
-void deg_iterator_duplis_init(DEGObjectIterData *data, Object *object, ListBase *duplis)
+void deg_iterator_duplis_init(DEGObjectIterData *data, Object *object)
 {
   data->dupli_parent = object;
-  data->dupli_list = duplis;
-  data->dupli_object_next = static_cast<DupliObject *>(duplis->first);
+  data->dupli_object_next = data->dupli_list.is_empty() ? nullptr : &data->dupli_list.first();
+  data->dupli_object_next_index = data->dupli_object_next ? 0 : -1;
 }
 
 /* Returns false when iterator is exhausted. */
 bool deg_iterator_duplis_step(DEGObjectIterData *data)
 {
-  if (data->dupli_list == nullptr) {
+  if (data->dupli_list.is_empty()) {
     return false;
   }
 
@@ -131,7 +133,13 @@ bool deg_iterator_duplis_step(DEGObjectIterData *data)
     DupliObject *dob = data->dupli_object_next;
     Object *obd = dob->ob;
 
-    data->dupli_object_next = data->dupli_object_next->next;
+    if (++data->dupli_object_next_index < data->dupli_list.size()) {
+      data->dupli_object_next = &data->dupli_list[data->dupli_object_next_index];
+    }
+    else {
+      data->dupli_object_next = nullptr;
+      data->dupli_object_next_index = -1;
+    }
 
     if (dob->no_draw) {
       continue;
@@ -196,10 +204,10 @@ bool deg_iterator_duplis_step(DEGObjectIterData *data)
   }
 
   free_owned_memory(data);
-  free_object_duplilist(data->dupli_list);
+  data->dupli_list.clear();
   data->dupli_parent = nullptr;
-  data->dupli_list = nullptr;
   data->dupli_object_next = nullptr;
+  data->dupli_object_next_index = -1;
   data->dupli_object_current = nullptr;
   deg_invalidate_iterator_work_data(data);
   return false;
@@ -265,9 +273,9 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
 
     const bool use_preview = object_orig == data->object_orig_with_preview;
     if (use_preview) {
-      ListBase *preview_duplis = object_duplilist_preview(
-          data->graph, data->scene, object, data->settings->viewer_path);
-      deg_iterator_duplis_init(data, object, preview_duplis);
+      object_duplilist_preview(
+          data->graph, data->scene, object, data->settings->viewer_path, data->dupli_list);
+      deg_iterator_duplis_init(data, object);
       data->id_node_index++;
       return true;
     }
@@ -286,9 +294,9 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
           ((object->transflag & OB_DUPLI) || object->runtime->geometry_set_eval != nullptr))
       {
         BLI_assert(deg::deg_validate_eval_copy_datablock(&object->id));
-        ListBase *duplis = object_duplilist(
-            data->graph, data->scene, object, data->settings->included_objects);
-        deg_iterator_duplis_init(data, object, duplis);
+        object_duplilist(
+            data->graph, data->scene, object, data->settings->included_objects, data->dupli_list);
+        deg_iterator_duplis_init(data, object);
       }
     }
 
@@ -304,27 +312,27 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
 
 }  // namespace
 
-DEGObjectIterData &DEGObjectIterData::operator=(const DEGObjectIterData &other)
+void DEGObjectIterData::transfer_from(DEGObjectIterData &other)
 {
-  if (this != &other) {
-    this->settings = other.settings;
-    this->graph = other.graph;
-    this->flag = other.flag;
-    this->scene = other.scene;
-    this->eval_mode = other.eval_mode;
-    this->object_orig_with_preview = other.object_orig_with_preview;
-    this->next_object = other.next_object;
-    this->dupli_parent = other.dupli_parent;
-    this->dupli_list = other.dupli_list;
-    this->dupli_object_next = other.dupli_object_next;
-    this->dupli_object_current = other.dupli_object_current;
-    this->temp_dupli_object = blender::dna::shallow_copy(other.temp_dupli_object);
-    this->temp_dupli_object_runtime = other.temp_dupli_object_runtime;
-    this->temp_dupli_object.runtime = &temp_dupli_object_runtime;
-    this->id_node_index = other.id_node_index;
-    this->num_id_nodes = other.num_id_nodes;
-  }
-  return *this;
+  BLI_assert(this != &other);
+
+  this->settings = other.settings;
+  this->graph = other.graph;
+  this->flag = other.flag;
+  this->scene = other.scene;
+  this->eval_mode = other.eval_mode;
+  this->object_orig_with_preview = other.object_orig_with_preview;
+  this->next_object = other.next_object;
+  this->dupli_parent = other.dupli_parent;
+  this->dupli_list = std::move(other.dupli_list);
+  this->dupli_object_next = other.dupli_object_next;
+  this->dupli_object_next_index = other.dupli_object_next_index;
+  this->dupli_object_current = other.dupli_object_current;
+  this->temp_dupli_object = blender::dna::shallow_copy(other.temp_dupli_object);
+  this->temp_dupli_object_runtime = other.temp_dupli_object_runtime;
+  this->temp_dupli_object.runtime = &temp_dupli_object_runtime;
+  this->id_node_index = other.id_node_index;
+  this->num_id_nodes = other.num_id_nodes;
 }
 
 static Object *find_object_with_preview_geometry(const ViewerPath &viewer_path)
@@ -374,8 +382,9 @@ void DEG_iterator_objects_begin(BLI_Iterator *iter, DEGObjectIterData *data)
 
   data->next_object = nullptr;
   data->dupli_parent = nullptr;
-  data->dupli_list = nullptr;
+  data->dupli_list.clear();
   data->dupli_object_next = nullptr;
+  data->dupli_object_next_index = -1;
   data->dupli_object_current = nullptr;
   data->scene = DEG_get_evaluated_scene(depsgraph);
   data->id_node_index = 0;
